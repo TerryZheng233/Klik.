@@ -9,13 +9,13 @@
   Apple silicon · macOS 14+
 </p>
 
-You’re halfway through a PDF in full-screen Preview and come across a paragraph you want to share. Press **⌥A**, drag over it, and hit **Enter**. The image is ready to paste. Press **→** and you’re on the next page.
+You’re reading a PDF and find a passage you want to share. Press **⌥A**, select it, and hit **Enter**. The screenshot is ready to paste, and you can carry on reading.
 
 ## Why I made Klik.
 
-I like WeChat’s screenshot tool. After I confirm a screenshot, I end up looking at WeChat again. That’s especially distracting when I’m reading or playing a game in full screen. The Mac’s default shortcut leaves a file on my desktop each time, even for a screenshot I only meant to paste into a chat.
+I’ve always liked how easy it is to take a screenshot in WeChat. What bothered me was ending up back in WeChat after every capture, especially when I was in the middle of reading or playing a game. The built-in Mac shortcut usually left me with a file on my desktop, even when all I wanted was to paste the image into a chat.
 
-I wanted a small Mac app I could call up for a quick screenshot. Klik. stays in the background and puts the toolbar beside your selection. Draw a box around a detail, point to it with an arrow, or add a few words. There’s a pen and a pixelation brush too. If you want to keep a file, click the save button for a PNG in Downloads.
+I wanted something I could reach for in the middle of whatever I was doing. Klik. stays in the background until I need it. I can draw a box or arrow, add a note, or pixelate a detail before copying the image. When I do want to keep a file, I can save a PNG to Downloads.
 
 ![A Wikipedia page about leap years with February 29 marked by a red box and arrow.](docs/klik-preview.png)
 
@@ -31,7 +31,7 @@ I wanted a small Mac app I could call up for a quick screenshot. Klik. stays in 
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
 
-If a window is partly covered, hold **Space** and point to a bit you can still see. Click it and the full window appears in the selection.
+To capture a partly covered window, hold **Space** and point to any visible part of it. Click, and the full window appears in the selection.
 
 ![A browser window partly covered by Notes on the left. The full browser window appears in the capture editor on the right.](docs/klik-window.png)
 
