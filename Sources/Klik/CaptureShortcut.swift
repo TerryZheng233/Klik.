@@ -9,11 +9,19 @@ struct CaptureShortcut: Codable, Equatable {
     static let defaultShortcut = CaptureShortcut(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey),
                                                  keyLabel: "A")
 
-    var title: String {
+    func title(using strings: AppStrings) -> String {
         let prefix = Self.modifierSymbols
             .filter { modifiers & $0.mask != 0 }
             .map(\.symbol).joined()
-        return prefix + keyLabel
+        let label: String
+        switch Int(keyCode) {
+        case kVK_Space: label = strings(.keySpace)
+        case kVK_ANSI_KeypadEnter: label = strings(.keyKeypadEnter)
+        default:
+            label = keyLabel.isEmpty || keyLabel == "键 \(keyCode)"
+                ? strings(.keyUnknown, keyCode) : keyLabel
+        }
+        return prefix + label
     }
 
     func matches(_ other: CaptureShortcut) -> Bool {
@@ -44,7 +52,7 @@ struct CaptureShortcut: Codable, Equatable {
             .uppercased()
         let label = Self.specialKeys[code] ?? Self.functionKeys[code]
             ?? printable.flatMap { $0.isEmpty ? nil : $0 }
-            ?? "键 \(code)"
+            ?? ""
         self.init(keyCode: UInt32(code), modifiers: modifiers, keyLabel: label)
     }
 
@@ -66,22 +74,23 @@ struct CaptureShortcut: Codable, Equatable {
     ].enumerated().map { ($0.element, "F\($0.offset + 1)") })
 
     private static let specialKeys: [Int: String] = [
-        kVK_Return: "Enter", kVK_ANSI_KeypadEnter: "小键盘 Enter", kVK_Tab: "Tab",
-        kVK_Space: "空格", kVK_Delete: "⌫", kVK_ForwardDelete: "⌦", kVK_Escape: "Esc",
+        kVK_Return: "Enter", kVK_ANSI_KeypadEnter: "Keypad Enter", kVK_Tab: "Tab",
+        kVK_Space: "Space", kVK_Delete: "⌫", kVK_ForwardDelete: "⌦", kVK_Escape: "Esc",
         kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓",
         kVK_Home: "Home", kVK_End: "End", kVK_PageUp: "Page Up", kVK_PageDown: "Page Down"
     ]
 }
 
-private enum ShortcutRecordingError: LocalizedError {
+private enum ShortcutRecordingError: KlikLocalizedError {
     case modifierNeeded
 
-    var errorDescription: String? { "请加上 ⌥、⌃ 或 ⌘，也可以使用 F1 到 F20。" }
+    func message(using strings: AppStrings) -> String { strings(.shortcutModifierNeeded) }
 }
 
-struct ShortcutPreferences {
+struct KlikPreferences {
     private let defaults: UserDefaults
     private static let key = "captureShortcut"
+    private static let languageKey = "interfaceLanguage"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -93,6 +102,13 @@ struct ShortcutPreferences {
     }
 
     var shortcut: CaptureShortcut { savedShortcut ?? .defaultShortcut }
+
+    var language: LanguagePreference {
+        get { defaults.string(forKey: Self.languageKey).flatMap(LanguagePreference.init(rawValue:)) ?? .system }
+        nonmutating set { defaults.set(newValue.rawValue, forKey: Self.languageKey) }
+    }
+
+    var strings: AppStrings { AppStrings(language: language.resolve()) }
 
     func save(_ shortcut: CaptureShortcut) throws {
         let data = try JSONEncoder().encode(shortcut)
@@ -162,17 +178,17 @@ final class GlobalHotKey {
     }
 }
 
-private struct HotKeyError: LocalizedError {
+private struct HotKeyError: KlikLocalizedError {
     let status: OSStatus
 
-    var errorDescription: String? {
+    func message(using strings: AppStrings) -> String {
         switch Int(status) {
         case eventHotKeyExistsErr:
-            return "这组快捷键已被其他应用占用，请换一组。"
+            return strings(.shortcutTaken)
         case eventHotKeyInvalidErr, eventInternalErr:
-            return "macOS 无法使用这组快捷键，请换一组。"
+            return strings(.shortcutUnavailable)
         default:
-            return "无法启用快捷键，请重试或换一组。（\(status)）"
+            return strings(.shortcutFailed, status)
         }
     }
 }

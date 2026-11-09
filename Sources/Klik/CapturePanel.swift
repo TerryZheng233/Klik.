@@ -4,8 +4,9 @@ import Carbon
 final class CapturePanel: NSPanel {
     private let canvas: CaptureView
 
-    init(frame: CGRect, image: CGImage, finish: @escaping () -> Void) {
-        canvas = CaptureView(background: CaptureImage(image: image, size: frame.size), finish: finish)
+    init(frame: CGRect, image: CGImage, strings: AppStrings = AppStrings(), finish: @escaping () -> Void) {
+        canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
+                             strings: strings, finish: finish)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -82,13 +83,13 @@ private final class PointerView: NSImageView {
 private enum Tool: CaseIterable {
     case rectangle, arrow, pen, text, mosaic
 
-    var item: (symbol: String, label: String) {
+    var item: (symbol: String, label: UIKey) {
         switch self {
-        case .rectangle: return ("rectangle-horizontal", "矩形")
-        case .arrow: return ("arrow-up-right", "箭头")
-        case .pen: return ("pencil", "画笔")
-        case .text: return ("type", "文字")
-        case .mosaic: return ("grid-3x3", "马赛克画刷")
+        case .rectangle: return ("rectangle-horizontal", .toolRectangle)
+        case .arrow: return ("arrow-up-right", .toolArrow)
+        case .pen: return ("pencil", .toolPen)
+        case .text: return ("type", .toolText)
+        case .mosaic: return ("grid-3x3", .toolMosaic)
         }
     }
 
@@ -125,6 +126,7 @@ private final class CaptureView: NSView {
     }
 
     private let background: CaptureImage
+    private let strings: AppStrings
     private let finish: () -> Void
     private let toolbar = NSVisualEffectView()
     private let palette = NSVisualEffectView()
@@ -132,6 +134,7 @@ private final class CaptureView: NSView {
     private let pointerView = PointerView()
     private let undoButton = NSButton()
     private let inkButton = NSButton()
+    private let toolbarDividers = [NSView(), NSView()]
     private var toolbarButtons: [NSButton] = []
     private var toolButtons: [Tool: NSButton] = [:]
     private var paletteButtons: [Ink: NSButton] = [:]
@@ -151,8 +154,9 @@ private final class CaptureView: NSView {
     private var pointerHotSpot = CGPoint.zero
     private var systemCursorHidden = false
 
-    init(background: CaptureImage, finish: @escaping () -> Void) {
+    init(background: CaptureImage, strings: AppStrings, finish: @escaping () -> Void) {
         self.background = background
+        self.strings = strings
         self.finish = finish
         super.init(frame: CGRect(origin: .zero, size: background.size))
         buildToolbar()
@@ -373,19 +377,25 @@ private final class CaptureView: NSView {
             toolButtons[tool] = button
             toolbarButtons.append(button)
         }
-        configure(undoButton, ("undo", "撤销（⌘Z）"), action: #selector(undo))
+        configure(undoButton, ("undo", .toolUndo), action: #selector(undo))
         toolbarButtons.append(undoButton)
-        for (symbol, label, action) in [
-            ("download", "下载 PNG", #selector(download)),
-            ("x", "取消（Esc）", #selector(cancel)),
-            ("check", "复制并完成（Enter）", #selector(confirm))
-        ] {
+        let actions: [(String, UIKey, Selector)] = [
+            ("download", .toolDownload, #selector(download)),
+            ("x", .toolCancel, #selector(cancel)),
+            ("check", .toolConfirm, #selector(confirm))
+        ]
+        for (symbol, label, action) in actions {
             let button = NSButton()
             configure(button, (symbol, label), action: action)
             toolbarButtons.append(button)
         }
         for button in toolbarButtons {
             toolbar.addSubview(button)
+        }
+        for divider in toolbarDividers {
+            divider.wantsLayer = true
+            divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            toolbar.addSubview(divider)
         }
         configureSwatch(inkButton, action: #selector(togglePalette))
         inkButton.isHidden = true
@@ -399,7 +409,10 @@ private final class CaptureView: NSView {
         tray.state = .active
         tray.appearance = NSAppearance(named: .darkAqua)
         tray.wantsLayer = true
-        tray.layer?.cornerRadius = 10
+        tray.layer?.cornerRadius = 12
+        tray.layer?.backgroundColor = KlikTheme.panelTint.cgColor
+        tray.layer?.borderColor = NSColor.white.withAlphaComponent(0.17).cgColor
+        tray.layer?.borderWidth = 1
         tray.layer?.masksToBounds = true
         tray.isHidden = true
         addSubview(tray)
@@ -408,10 +421,18 @@ private final class CaptureView: NSView {
     private func layoutToolbarButtons() {
         var visible = toolbarButtons
         if !inkButton.isHidden { visible.insert(inkButton, at: Tool.allCases.count) }
+        let afterTools = Tool.allCases.count + (inkButton.isHidden ? 0 : 1)
+        let dividerPositions = [afterTools, visible.count - 2]
+        var x: CGFloat = 5
         for (index, button) in visible.enumerated() {
-            button.frame = CGRect(x: 5 + 33 * index, y: 4, width: 33, height: 30)
+            if let dividerIndex = dividerPositions.firstIndex(of: index) {
+                toolbarDividers[dividerIndex].frame = CGRect(x: x + 3, y: 11, width: 1, height: 18)
+                x += 8
+            }
+            button.frame = CGRect(x: x, y: 5, width: 33, height: 30)
+            x += 33
         }
-        toolbar.setFrameSize(CGSize(width: 10 + 33 * visible.count, height: 38))
+        toolbar.setFrameSize(CGSize(width: x + 5, height: 40))
     }
 
     private func buildPalette() {
@@ -420,8 +441,8 @@ private final class CaptureView: NSView {
             let button = NSButton(frame: CGRect(x: 5 + 27 * index, y: 4, width: 27, height: 27))
             configureSwatch(button, action: #selector(pickInk(_:)))
             button.tag = index
-            button.toolTip = color.label
-            button.setAccessibilityLabel(color.label)
+            button.toolTip = strings(color.label)
+            button.setAccessibilityLabel(strings(color.label))
             palette.addSubview(button)
             paletteButtons[color] = button
         }
@@ -438,7 +459,7 @@ private final class CaptureView: NSView {
     }
 
     private func updateSwatches() {
-        let title = "标注颜色（\(ink.label)）"
+        let title = strings(.inkPicker, strings(ink.label))
         inkButton.toolTip = title
         inkButton.setAccessibilityLabel(title)
         inkButton.image = swatch(ink, selected: false)
@@ -477,17 +498,18 @@ private final class CaptureView: NSView {
         refresh()
     }
 
-    private func configure(_ button: NSButton, _ item: (symbol: String, label: String), action: Selector) {
+    private func configure(_ button: NSButton, _ item: (symbol: String, label: UIKey), action: Selector) {
         if let url = Bundle.main.url(forResource: item.symbol, withExtension: "svg", subdirectory: "Lucide"),
            let image = NSImage(contentsOf: url) {
             image.size = NSSize(width: 18, height: 18)
             image.isTemplate = true
             button.image = image
         }
-        if button.image == nil { button.title = item.label }
+        let title = strings(item.label)
+        if button.image == nil { button.title = title }
         button.imagePosition = button.image == nil ? .noImage : .imageOnly
-        button.setAccessibilityLabel(item.label)
-        button.toolTip = item.label
+        button.setAccessibilityLabel(title)
+        button.toolTip = title
         button.isBordered = false
         button.target = self
         button.action = action
@@ -496,8 +518,8 @@ private final class CaptureView: NSView {
         button.layer?.cornerRadius = 6
         switch item.symbol {
         case "x": button.contentTintColor = .systemRed
-        case "check": button.contentTintColor = .systemGreen
-        default: button.contentTintColor = .white
+        case "check": button.contentTintColor = KlikTheme.accent
+        default: button.contentTintColor = KlikTheme.overlayInk
         }
     }
 
@@ -546,7 +568,7 @@ private final class CaptureView: NSView {
     private func choose(_ chosen: Tool?) {
         tool = chosen
         for (tool, button) in toolButtons {
-            button.layer?.backgroundColor = tool == chosen ? NSColor.systemBlue.cgColor : nil
+            button.layer?.backgroundColor = tool == chosen ? KlikTheme.buttonSelected.cgColor : nil
         }
     }
 
@@ -556,7 +578,7 @@ private final class CaptureView: NSView {
         textOrigin = CGPoint(x: x + 3, y: y + 2)
         let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, selection.maxX - x)), height: 26))
         field.font = Mark.textFont
-        field.placeholderString = "输入文字"
+        field.placeholderString = strings(.textPlaceholder)
         field.isBezeled = true
         field.bezelStyle = .roundedBezel
         field.usesSingleLineMode = true
@@ -593,7 +615,7 @@ private final class CaptureView: NSView {
         refresh()
         guard let image = background.render(selection: selection, marks: marks),
               let png = CaptureImage.png(image) else {
-            report("无法生成截图，请缩小选区后重试。")
+            report(strings(.renderError))
             return
         }
 
@@ -607,7 +629,7 @@ private final class CaptureView: NSView {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             guard pasteboard.writeObjects([item]) else {
-                report("无法写入剪贴板，请重试或点击下载。")
+                report(strings(.clipboardError))
                 return
             }
         case .downloads:
@@ -620,7 +642,7 @@ private final class CaptureView: NSView {
                 let name = "Klik \(formatter.string(from: Date())) \(UUID().uuidString.prefix(6)).png"
                 try png.write(to: folder.appendingPathComponent(name), options: .atomic)
             } catch {
-                report("无法保存到「下载」。请检查 Klik 的文件访问权限。")
+                report(strings(.downloadError))
                 return
             }
         }

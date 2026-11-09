@@ -29,7 +29,13 @@ Reopen Klik. from Applications whenever you want to change the shortcut. If a co
 
 ![The two first-launch screens in Klik.: learn the basics, then keep Option+A or record a different shortcut. The app UI is shown in Simplified Chinese.](docs/klik-guide.png)
 
-*The setup figure shows the current Simplified Chinese app interface.*
+*The setup figure shows the Simplified Chinese interface in 0.1.7.*
+
+## Language and appearance
+
+In 0.1.8, Klik. follows your system’s preferred language by default. To switch instantly, reopen Klik. and choose **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings also adapt to macOS light and dark appearance.
+
+![The English quick start in light appearance and Simplified Chinese settings in dark appearance.](docs/klik-interface.png)
 
 ## While you capture
 

@@ -2,7 +2,7 @@ import AppKit
 import ScreenCaptureKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let preferences = ShortcutPreferences()
+    private let preferences = KlikPreferences()
     private var hotKey: GlobalHotKey?
     private var setup: ShortcutSetup?
     private var captureTask: Task<Void, Never>?
@@ -11,11 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var presentingAlert = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        var shortcutIssue: String?
+        var shortcutIssue: Error?
         do {
             try enableShortcut(preferences.shortcut)
         } catch {
-            shortcutIssue = error.localizedDescription
+            shortcutIssue = error
         }
         if preferences.savedShortcut == nil || shortcutIssue != nil {
             showSetup(issue: shortcutIssue)
@@ -39,13 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func showSetup(issue: String? = nil) {
+    private func showSetup(issue: Error? = nil) {
         if let setup {
             setup.present()
             return
         }
         let controller = ShortcutSetup(
             shortcut: preferences.shortcut, firstRun: preferences.savedShortcut == nil, issue: issue,
+            language: preferences.language,
+            changeLanguage: { [weak self] language in self?.preferences.language = language },
             save: { [weak self] shortcut in
                 guard let self else { return }
                 try self.enableShortcut(shortcut)
@@ -64,14 +66,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func beginCapture() {
         guard overlay == nil, captureTask == nil, !presentingAlert else { return }
+        let strings = preferences.strings
 
         if !CGPreflightScreenCaptureAccess(), !CGRequestScreenCaptureAccess() {
             presentingAlert = true
             let alert = NSAlert()
-            alert.messageText = "允许 Klik 截取屏幕"
-            alert.informativeText = "在系统设置的「隐私与安全性 → 屏幕与系统音频录制」中开启 Klik。若系统提示重新打开，请照做，再按 \(preferences.shortcut.title)。"
-            alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "取消")
+            alert.messageText = strings(.permissionTitle)
+            alert.informativeText = strings(.permissionBody, preferences.shortcut.title(using: strings))
+            alert.addButton(withTitle: strings(.openSystemSettings))
+            alert.addButton(withTitle: strings(.cancel))
             if alert.runModal() == .alertFirstButtonReturn,
                let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                 NSWorkspace.shared.open(settings)
@@ -84,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main,
               let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
         else {
-            showAlert("无法识别显示器", "请重新按截图快捷键。")
+            showAlert(strings(.displayUnavailable), strings(.captureRetry))
             return
         }
 
@@ -101,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         && ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
                 }) else { throw CaptureError.displayChanged }
 
-                let panel = CapturePanel(frame: frame, image: image) { [weak self] in
+                let panel = CapturePanel(frame: frame, image: image, strings: strings) { [weak self] in
                     self?.closeCapture()
                 }
                 guard try await self.presentCapture(panel) else {
@@ -109,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 self.closeCapture()
-                self.showAlert("截图未完成", error.localizedDescription)
+                self.showAlert(strings(.captureFailed), strings.message(for: error, fallback: .captureRetry))
             }
         }
     }
@@ -165,19 +168,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = detail
-        alert.addButton(withTitle: "好")
+        alert.addButton(withTitle: preferences.strings(.ok))
         alert.runModal()
     }
 }
 
-private enum CaptureError: LocalizedError {
+private enum CaptureError: KlikLocalizedError {
     case displayChanged
     case overlayFocus
 
-    var errorDescription: String? {
+    func message(using strings: AppStrings) -> String {
         switch self {
-        case .displayChanged: return "显示器状态已变化，请重新按截图快捷键。"
-        case .overlayFocus: return "截图浮层未获得键盘焦点，请重新按截图快捷键。"
+        case .displayChanged: return strings(.displayChanged)
+        case .overlayFocus: return strings(.overlayFocus)
         }
     }
 }

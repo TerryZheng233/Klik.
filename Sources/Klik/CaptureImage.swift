@@ -5,16 +5,16 @@ import UniformTypeIdentifiers
 enum Ink: CaseIterable {
     case red, orange, yellow, green, blue, purple, white, black
 
-    var label: String {
+    var label: UIKey {
         switch self {
-        case .red: return "红色"
-        case .orange: return "橙色"
-        case .yellow: return "黄色"
-        case .green: return "绿色"
-        case .blue: return "蓝色"
-        case .purple: return "紫色"
-        case .white: return "白色"
-        case .black: return "黑色"
+        case .red: return .inkRed
+        case .orange: return .inkOrange
+        case .yellow: return .inkYellow
+        case .green: return .inkGreen
+        case .blue: return .inkBlue
+        case .purple: return .inkPurple
+        case .white: return .inkWhite
+        case .black: return .inkBlack
         }
     }
 
