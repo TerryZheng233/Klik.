@@ -119,11 +119,14 @@ enum Mark {
 final class CaptureImage {
     let image: CGImage
     let size: CGSize
+    let origin: CGPoint
+    var frame: CGRect { CGRect(origin: origin, size: size) }
     private let pixelated: CGImage?
 
-    init(image: CGImage, size: CGSize) {
+    init(image: CGImage, size: CGSize, origin: CGPoint = .zero) {
         self.image = image
         self.size = size
+        self.origin = origin
         // One sample per roughly 14 points. Upscaling with nearest neighbour gives visible blocks.
         let reduced = Self.bitmap(width: max(1, Int(size.width / 14)), height: max(1, Int(size.height / 14)))
         reduced?.interpolationQuality = .high
@@ -142,13 +145,13 @@ final class CaptureImage {
             drawTopDown(pixelated, in: context)
         } else {
             context.setFillColor(NSColor.black.cgColor)
-            context.fill(CGRect(origin: .zero, size: size))
+            context.fill(frame)
         }
     }
 
     private func drawTopDown(_ image: CGImage, in context: CGContext) {
         context.saveGState()
-        context.translateBy(x: 0, y: size.height)
+        context.translateBy(x: origin.x, y: origin.y + size.height)
         context.scaleBy(x: 1, y: -1)
         context.draw(image, in: CGRect(origin: .zero, size: size))
         context.restoreGState()
@@ -158,7 +161,8 @@ final class CaptureImage {
         let scaleX = CGFloat(image.width) / size.width
         let scaleY = CGFloat(image.height) / size.height
         let pixelBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let pixels = selection.applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
+        let pixels = selection.offsetBy(dx: -origin.x, dy: -origin.y)
+            .applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
             .integral.intersection(pixelBounds)
         guard !pixels.isEmpty, let crop = image.cropping(to: pixels),
               let context = Self.bitmap(width: crop.width, height: crop.height) else { return nil }
@@ -166,7 +170,7 @@ final class CaptureImage {
         context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
         context.translateBy(x: 0, y: CGFloat(crop.height))
         context.scaleBy(x: scaleX, y: -scaleY)
-        context.translateBy(x: -pixels.minX / scaleX, y: -pixels.minY / scaleY)
+        context.translateBy(x: -origin.x - pixels.minX / scaleX, y: -origin.y - pixels.minY / scaleY)
         context.clip(to: selection)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)

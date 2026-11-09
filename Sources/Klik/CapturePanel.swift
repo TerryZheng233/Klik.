@@ -6,10 +6,12 @@ final class CapturePanel: NSPanel {
 
     private let canvas: CaptureView
 
-    init(frame: CGRect, image: CGImage, windowFrames: [CGRect] = [], strings: AppStrings = AppStrings(),
-         guided: Bool = false, finish: @escaping (Outcome) -> Void) {
+    init(frame: CGRect, image: CGImage, windowTargets: [WindowSnap] = [], strings: AppStrings = AppStrings(),
+         guided: Bool = false, captureWindow: ((CGWindowID) async throws -> CGImage)? = nil,
+         finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
-                             windowFrames: windowFrames, strings: strings, guided: guided, finish: finish)
+                             windowTargets: windowTargets, strings: strings, guided: guided,
+                             captureWindow: captureWindow, finish: finish)
         super.init(contentRect: frame, styleMask: .borderless,
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -31,8 +33,9 @@ final class CapturePanel: NSPanel {
 
     func present() -> Bool {
         makeKeyAndOrderFront(nil)
-        guard isKeyWindow else { return false }
+        guard NSApp.isActive, isKeyWindow else { return false }
         canvas.updatePointer(at: mouseLocationOutsideOfEventStream)
+        alphaValue = 1
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isVisible, self.isKeyWindow else { return }
             self.canvas.updatePointer(at: self.mouseLocationOutsideOfEventStream, force: true)
@@ -41,11 +44,16 @@ final class CapturePanel: NSPanel {
     }
 
     override func orderOut(_ sender: Any?) {
+        canvas.cancelWindowCapture()
         canvas.clearPointer()
         super.orderOut(sender)
     }
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyUp, Int(event.keyCode) == kVK_Space, canvas.isWindowSnapHeld {
+            canvas.setWindowSnapHeld(false, at: mouseLocationOutsideOfEventStream)
+            return
+        }
         if event.type == .keyDown {
             let key = Int(event.keyCode)
             if key == kVK_Escape {
@@ -59,6 +67,10 @@ final class CapturePanel: NSPanel {
             }
 
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if key == kVK_Space, modifiers.isEmpty, canvas.canSnapToWindow {
+                if !event.isARepeat { canvas.setWindowSnapHeld(true, at: mouseLocationOutsideOfEventStream) }
+                return
+            }
             if !canvas.isEditingText, modifiers == .command, event.charactersIgnoringModifiers == "z" {
                 canvas.undo()
                 return
@@ -69,7 +81,7 @@ final class CapturePanel: NSPanel {
             return
         }
         super.sendEvent(event)
-        if isVisible && [.mouseMoved, .mouseEntered, .mouseExited, .flagsChanged,
+        if isVisible && [.mouseMoved, .mouseEntered, .mouseExited,
                          .leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type) {
             canvas.updatePointer(at: mouseLocationOutsideOfEventStream)
         }
@@ -104,7 +116,7 @@ private final class CaptureView: NSView {
     enum Destination { case clipboard, downloads }
 
     private enum Drag {
-        case select(CGPoint, moved: Bool)
+        case select(CGPoint, moved: Bool, window: WindowSnap?)
         case resize(Selection.Handle, CGRect, CGPoint)
         case move(CGRect, CGPoint)
         case mark(Tool, CGPoint)
@@ -130,8 +142,12 @@ private final class CaptureView: NSView {
         }
     }
 
-    private let background: CaptureImage
-    private let windowFrames: [CGRect]
+    private let desktop: CaptureImage
+    private var windowImage: CaptureImage?
+    private var background: CaptureImage { windowImage ?? desktop }
+    private let windowTargets: [WindowSnap]
+    private let captureWindow: ((CGWindowID) async throws -> CGImage)?
+    private var windowCaptureTask: Task<Void, Never>?
     private let strings: AppStrings
     private let finish: (CapturePanel.Outcome) -> Void
     private let coach: CaptureCoach?
@@ -149,6 +165,7 @@ private final class CaptureView: NSView {
     private var paletteButtons: [Ink: NSButton] = [:]
     private var selection: CGRect?
     private var draftSelection: CGRect?
+    private(set) var isWindowSnapHeld = false
     private var hoveredWindow: CGRect?
     private var marks: [Mark] = []
     private var preview: Mark?
@@ -164,10 +181,12 @@ private final class CaptureView: NSView {
     private var pointerHotSpot = CGPoint.zero
     private var systemCursorHidden = false
 
-    init(background: CaptureImage, windowFrames: [CGRect], strings: AppStrings, guided: Bool,
+    init(background: CaptureImage, windowTargets: [WindowSnap], strings: AppStrings, guided: Bool,
+         captureWindow: ((CGWindowID) async throws -> CGImage)?,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
-        self.background = background
-        self.windowFrames = windowFrames
+        self.desktop = background
+        self.windowTargets = windowTargets
+        self.captureWindow = captureWindow
         self.strings = strings
         self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
@@ -209,6 +228,12 @@ private final class CaptureView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     var isEditingText: Bool { textField != nil }
+    var canSnapToWindow: Bool { selection == nil && !windowTargets.isEmpty && windowCaptureTask == nil }
+
+    func cancelWindowCapture() {
+        windowCaptureTask?.cancel()
+        windowCaptureTask = nil
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -232,8 +257,8 @@ private final class CaptureView: NSView {
 
     func updatePointer(at windowPoint: CGPoint, force: Bool = false) {
         let point = convert(windowPoint, from: nil)
-        let candidate = selection == nil && drag == nil && !NSEvent.modifierFlags.contains(.shift)
-            ? WindowSnap.target(at: point, in: windowFrames) : nil
+        let candidate = isWindowSnapHeld && canSnapToWindow && drag == nil
+            ? WindowSnap.target(at: point, in: windowTargets)?.frame.intersection(bounds) : nil
         if hoveredWindow != candidate {
             hoveredWindow = candidate
             needsDisplay = true
@@ -281,9 +306,21 @@ private final class CaptureView: NSView {
         }
     }
 
+    func setWindowSnapHeld(_ held: Bool, at windowPoint: CGPoint) {
+        guard held != isWindowSnapHeld else { return }
+        isWindowSnapHeld = held
+        updatePointer(at: windowPoint)
+        updateModeHint()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        background.draw(in: context)
+        desktop.draw(in: context)
+        if let windowImage {
+            context.setFillColor(KlikTheme.panelTint.withAlphaComponent(1).cgColor)
+            context.fill(windowImage.frame)
+            windowImage.draw(in: context)
+        }
         let active = draftSelection ?? selection ?? (drag == nil ? hoveredWindow : nil)
         context.setFillColor(NSColor.black.withAlphaComponent(0.32).cgColor)
         let mask = CGMutablePath()
@@ -316,6 +353,7 @@ private final class CaptureView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard windowCaptureTask == nil else { return }
         showPalette = false
         commitText()
         window?.makeFirstResponder(self)
@@ -338,7 +376,8 @@ private final class CaptureView: NSView {
                 drag = .move(selection, point)
             }
         } else {
-            drag = .select(point, moved: false)
+            let window = isWindowSnapHeld ? WindowSnap.target(at: point, in: windowTargets) : nil
+            drag = .select(point, moved: false, window: window)
             draftSelection = CGRect(origin: point, size: .zero)
         }
         refresh()
@@ -353,11 +392,13 @@ private final class CaptureView: NSView {
         guard drag != nil else { return }
         let point = mousePoint(event)
         updateDrag(at: point)
-        if case .select(_, let moved) = drag, let draftSelection {
+        if case .select(_, let moved, let window) = drag, let draftSelection {
             if !moved, selection == nil {
-                let target = event.modifierFlags.contains(.shift)
-                    ? nil : WindowSnap.target(at: point, in: windowFrames)
-                replaceSelection(with: target ?? bounds)
+                if let window, let captureWindow {
+                    selectWindow(window, using: captureWindow)
+                } else {
+                    replaceSelection(with: bounds)
+                }
             } else if draftSelection.width >= Selection.minimum && draftSelection.height >= Selection.minimum {
                 replaceSelection(with: draftSelection)
             }
@@ -370,10 +411,31 @@ private final class CaptureView: NSView {
         refresh()
     }
 
-    private func replaceSelection(with rect: CGRect) {
+    private func replaceSelection(with rect: CGRect, windowImage: CaptureImage? = nil) {
+        self.windowImage = windowImage
         selection = rect
         marks.removeAll()
         choose(nil)
+    }
+
+    private func selectWindow(_ target: WindowSnap, using capture: @escaping (CGWindowID) async throws -> CGImage) {
+        windowCaptureTask = Task { @MainActor [weak self] in
+            do {
+                let image = try await capture(target.id)
+                guard !Task.isCancelled, let self else { return }
+                let frame = target.previewFrame(in: self.bounds)
+                self.windowCaptureTask = nil
+                self.replaceSelection(with: frame,
+                                      windowImage: CaptureImage(image: image, size: frame.size, origin: frame.origin))
+                self.refresh()
+                if let window = self.window { self.updatePointer(at: window.mouseLocationOutsideOfEventStream) }
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                self.windowCaptureTask = nil
+                self.report(self.strings(.windowCaptureFailed))
+                self.refresh()
+            }
+        }
     }
 
     private func mousePoint(_ event: NSEvent) -> CGPoint {
@@ -384,17 +446,17 @@ private final class CaptureView: NSView {
 
     private func updateDrag(at point: CGPoint) {
         switch drag {
-        case .select(let start, let moved):
+        case .select(let start, let moved, let window):
             let draft = Selection.between(start, point)
             draftSelection = draft
             if !moved, max(draft.width, draft.height) > 3 {
-                drag = .select(start, moved: true)
+                drag = .select(start, moved: true, window: window)
             }
         case .resize(let handle, let original, let start):
             let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
-            selection = handle.resize(original, delta: delta, in: bounds)
+            selection = handle.resize(original, delta: delta, in: windowImage?.frame ?? bounds)
         case .move(let original, let start):
-            selection = Selection.move(original, from: start, to: point, in: bounds)
+            selection = Selection.move(original, from: start, to: point, in: windowImage?.frame ?? bounds)
         case .mark(let tool, let start):
             guard let selection else { return }
             let end = CGPoint(x: min(max(point.x, selection.minX), selection.maxX),
@@ -611,7 +673,7 @@ private final class CaptureView: NSView {
         }
         undoButton.isEnabled = !marks.isEmpty || isEditingText
         if let coach {
-            if drag != nil || isEditingText {
+            if drag != nil || isEditingText || windowCaptureTask != nil || !errorLabel.isHidden {
                 coach.hide()
             } else if let selection {
                 coach.showToolbar(practiceSteps, toolbar: toolbar.frame,
@@ -625,9 +687,12 @@ private final class CaptureView: NSView {
     }
 
     private func updateModeHint() {
-        modeHint.isHidden = selection != nil || drag != nil || coach != nil || windowFrames.isEmpty
+        let capturingWindow = windowCaptureTask != nil
+        modeHint.isHidden = !capturingWindow && (selection != nil || drag != nil || coach != nil || windowTargets.isEmpty)
         guard !modeHint.isHidden else { return }
-        modeHint.stringValue = strings(.windowSnapHint)
+        let message: UIKey = capturingWindow ? .windowCapturePending
+            : (isWindowSnapHeld ? .windowSnapActive : .windowSnapHint)
+        modeHint.stringValue = strings(message)
         modeHint.sizeToFit()
         let width = min(bounds.width - 16, modeHint.frame.width + 26)
         modeHint.frame = CGRect(x: bounds.midX - width / 2, y: bounds.maxY - 46, width: width, height: 28)
@@ -686,7 +751,7 @@ private final class CaptureView: NSView {
     @objc private func confirm() { export(.clipboard) }
 
     func export(_ destination: Destination) {
-        guard drag == nil, let selection else { return }
+        guard drag == nil, windowCaptureTask == nil, let selection else { return }
         commitText()
         refresh()
         guard let image = background.render(selection: selection, marks: marks),

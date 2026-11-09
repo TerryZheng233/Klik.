@@ -50,8 +50,8 @@ Press **Enter** to copy your capture or **↓** to save a PNG. Klik. then asks w
 | Control | What it does |
 | --- | --- |
 | **⌥A** (default) | Start a region capture on the display under the pointer |
-| **Click a window** (0.1.12+) | Hover to preview its boundary, then click to select it |
-| **Click the desktop** or **Shift-click** (0.1.12+) | Select the whole display |
+| **Single click** (0.1.13+) | Select the whole display before drawing a region |
+| **Hold Space and click** (0.1.13+) | Capture the window under the pointer on its own, including content behind other windows |
 | **Drag an edge or corner** | Adjust the selected region |
 | **Enter** or **green ✓** | Copy the finished image to the clipboard |
 | **↓** | Save a PNG to Downloads |

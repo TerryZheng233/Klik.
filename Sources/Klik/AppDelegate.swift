@@ -100,19 +100,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = screen.frame
         let scale = screen.backingScaleFactor
         let id = displayID.uint32Value
-        practice?.window?.orderOut(nil)
+        let guideWindow = practice?.window
+        let guideWindowID = guideWindow.flatMap { CGWindowID(exactly: $0.windowNumber) }
         captureTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.captureTask = nil }
             do {
-                let snapshot = try await Self.snapshot(displayID: id, pointSize: frame.size, scale: scale)
+                let snapshot = try await Self.snapshot(displayID: id, pointSize: frame.size, scale: scale,
+                                                       excluding: guideWindowID)
                 guard NSScreen.screens.contains(where: {
                     $0.frame == frame && $0.backingScaleFactor == scale
                         && ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
                 }) else { throw CaptureError.displayChanged }
 
-                let panel = CapturePanel(frame: frame, image: snapshot.image, windowFrames: snapshot.windows,
-                                         strings: strings, guided: practice != nil) {
+                let windows = snapshot.windows
+                let panel = CapturePanel(frame: frame, image: snapshot.image, windowTargets: snapshot.targets,
+                                         strings: strings, guided: practice != nil,
+                                         captureWindow: { id in
+                                             guard let window = windows[id] else { throw CaptureError.displayChanged }
+                                             return try await Self.snapshot(window: window)
+                                         }) {
                     [weak self, weak practice] outcome in
                     self?.closeCapture(restoreFocus: practice == nil)
                     practice?.returnFromPractice(outcome)
@@ -120,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard try await self.presentCapture(panel) else {
                     throw CaptureError.overlayFocus
                 }
+                if self.overlay === panel { guideWindow?.orderOut(nil) }
             } catch {
                 self.closeCapture(restoreFocus: practice == nil)
                 practice?.returnFromPractice(.cancelled)
@@ -134,29 +142,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         previousForegroundApp = foreground?.processIdentifier == NSRunningApplication.current.processIdentifier
             ? nil : foreground
         // App activation and the key-window handoff can complete on different run-loop turns.
-        NSApp.activate()
         overlay = panel
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSApp.activate()
         for _ in 0..<24 {
-            if ownsForeground, NSApp.isActive, panel.present() { return true }
+            if panel.present() { return true }
             try await Task.sleep(for: .milliseconds(20))
         }
         return false
     }
 
     private static func snapshot(displayID: CGDirectDisplayID, pointSize: CGSize,
-                                 scale: CGFloat) async throws -> (image: CGImage, windows: [CGRect]) {
+                                 scale: CGFloat, excluding windowID: CGWindowID?) async throws
+        -> (image: CGImage, windows: [CGWindowID: SCWindow], targets: [WindowSnap]) {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayChanged
         }
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let excludedWindows = content.windows.filter { $0.windowID == windowID }
+        let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
         let config = SCStreamConfiguration()
         config.width = Int((pointSize.width * scale).rounded())
         config.height = Int((pointSize.height * scale).rounded())
         config.showsCursor = false
-        let windows = WindowSnap.visibleFrames(on: displayID, canvasSize: pointSize)
+        var windows: [CGWindowID: SCWindow] = [:]
+        for window in content.windows where window.windowID != windowID {
+            windows[window.windowID] = window
+        }
+        let targets = WindowSnap.candidates(on: displayID, canvasSize: pointSize, available: Set(windows.keys))
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        return (image, windows)
+        return (image, windows, targets)
+    }
+
+    private static func snapshot(window: SCWindow) async throws -> CGImage {
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let size = filter.contentRect.size
+        let scale = CGFloat(filter.pointPixelScale)
+        let config = SCStreamConfiguration()
+        config.width = max(1, Int((size.width * scale).rounded()))
+        config.height = max(1, Int((size.height * scale).rounded()))
+        config.showsCursor = false
+        config.ignoreShadowsSingleWindow = true
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 
     private var ownsForeground: Bool {

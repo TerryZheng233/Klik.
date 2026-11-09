@@ -62,6 +62,9 @@ enum UIKey: String, CaseIterable {
     case practiceCancel
     case practiceConfirm
     case windowSnapHint
+    case windowSnapActive
+    case windowCapturePending
+    case windowCaptureFailed
     case next
     case back
     case done

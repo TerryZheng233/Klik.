@@ -55,6 +55,23 @@ final class CaptureTests: XCTestCase {
         XCTAssertEqual(try rgba(result, x: 6, y: 20), [0, 0, 0, 255])
     }
 
+    func testWindowExportUsesNativePixelsAndMarksAtItsPreviewPosition() throws {
+        let source = try makeImage(width: 200, height: 140) { context in
+            context.setFillColor(CGColor(red: 0, green: 1, blue: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 200, height: 140))
+        }
+        let preview = CGRect(x: 280, y: 190, width: 100, height: 70)
+        let window = CaptureImage(image: source, size: preview.size, origin: preview.origin)
+        let result = try XCTUnwrap(window.render(
+            selection: preview,
+            marks: [.pen([CGPoint(x: 300, y: 215), CGPoint(x: 320, y: 215)], .red)]
+        ))
+        XCTAssertEqual(result.width, 200)
+        XCTAssertEqual(result.height, 140)
+        XCTAssertEqual(try rgba(result, x: 180, y: 115), try rgba(source, x: 180, y: 115))
+        try assertRed(result, x: 60, y: 50)
+    }
+
     func testMosaicFollowsBrushInsteadOfItsBoundingBox() throws {
         let source = try makeImage(width: 224, height: 224) { context in
             context.setFillColor(CGColor(gray: 0, alpha: 1))
