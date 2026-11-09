@@ -10,17 +10,19 @@
   Apple silicon · macOS 14+
 </p>
 
+> The illustrations and some features below show unreleased changes on the main branch. The latest downloadable release may look or behave differently.
+
 Whether you’re reading a paper, browsing a website, or playing a game, press **⌥A** when you see something you want to capture. Select it, then hit **Enter** or simply double-click inside the selection. Your screenshot is ready to paste, and you can carry on with what you were doing. Klik. also keeps recent screenshots on your Mac, so you can find and copy them again from the menu bar.
 
 ## Why I made Klik.
 
 I like how easy it is to take a screenshot in WeChat. But by default, confirming a screenshot brings the WeChat window back to the front, even when I’m in the middle of reading or playing a game. Mac screenshots are saved to the desktop by default, so I kept collecting files when all I wanted was to paste a screenshot.
 
-I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. If I want a file, I can save a PNG to Downloads.
+I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. Drag boxes, arrows, text, and pen marks to reposition them. Adjust a box using its handles, or drag an arrow’s endpoints to change its length and direction. When adding text, press Enter once to finish editing and again to copy. If I want a file, I can save a PNG to Downloads.
 
-![A restaurant booking in Safari selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-preview.png)
+![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-preview.png)
 
-A dinner plan to send to a friend: highlight the time, cover the contact details, and copy.
+A dinner plan to send to a friend: highlight the time, cover the contact details, and copy. This illustration uses fictional booking details.
 
 ## Choose what to capture
 
@@ -48,13 +50,15 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 
 ## Recent screenshots and settings
 
-Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list when you’re done. Klik. keeps 10 by default. In settings, you can change the limit to 5, 10, 20, or 50 screenshots. When the limit is reached, the oldest captures are removed.
+Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can change the limit to 5, 10, 20, or 50 screenshots. When the limit is reached, the oldest captures are removed.
 
 Settings also lets you turn on opening Klik. at login.
 
 If **⌥A** is already in use, for example by WeChat, you can choose another shortcut during setup or in settings. The two apps may not be able to use the same shortcut at the same time.
 
-In settings, you can also change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance. To run through the guide again, choose **Practice a Capture…**.
+In settings, you can also change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance.
+
+![Illustration of Klik. settings in English light mode and Simplified Chinese dark mode.](docs/klik-interface.png)
 
 ## Install with an agent
 

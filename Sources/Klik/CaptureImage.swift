@@ -36,7 +36,7 @@ enum Ink: CaseIterable {
     var outline: NSColor { self == .white || self == .yellow ? .black : .white }
 }
 
-enum Mark {
+enum Mark: Equatable {
     case rectangle(CGRect, Ink)
     case arrow(CGPoint, CGPoint, Ink)
     case pen([CGPoint], Ink)
@@ -44,6 +44,57 @@ enum Mark {
     case mosaic([CGPoint])
 
     static let textFont = NSFont.systemFont(ofSize: 18, weight: .semibold)
+
+    // Mosaic strokes stay fixed so a misplaced drag cannot reveal covered content.
+    var movableBounds: CGRect? {
+        switch self {
+        case .rectangle(let rect, _): return rect.standardized
+        case .arrow(let start, let end, _): return CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
+                                                          width: abs(end.x - start.x), height: abs(end.y - start.y))
+        case .pen(let points, _):
+            guard let first = points.first else { return nil }
+            return points.dropFirst().reduce(CGRect(x: first.x, y: first.y, width: 0.01, height: 0.01)) { rect, point in
+                rect.union(CGRect(x: point.x, y: point.y, width: 0.01, height: 0.01))
+            }
+        case .text(let value, let origin, _):
+            let size = (value as NSString).size(withAttributes: [.font: Self.textFont])
+            return CGRect(origin: origin, size: size)
+        case .mosaic: return nil
+        }
+    }
+
+    func hitTest(_ point: CGPoint, tolerance: CGFloat = 8) -> Bool {
+        func segment(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> Bool {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let length = dx * dx + dy * dy
+            let t = length > 0 ? max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length)) : 0
+            return hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= tolerance
+        }
+        switch self {
+        case .rectangle(let rect, _):
+            let r = rect.standardized
+            return r.insetBy(dx: -tolerance, dy: -tolerance).contains(point)
+                && !r.insetBy(dx: tolerance, dy: tolerance).contains(point)
+        case .arrow(let start, let end, _): return segment(point, start, end)
+        case .pen(let points, _):
+            guard let first = points.first else { return false }
+            if points.count == 1 { return hypot(point.x - first.x, point.y - first.y) <= tolerance }
+            return zip(points, points.dropFirst()).contains { segment(point, $0.0, $0.1) }
+        case .text: return movableBounds?.insetBy(dx: -tolerance, dy: -tolerance).contains(point) ?? false
+        case .mosaic: return false
+        }
+    }
+
+    func translated(by delta: CGPoint) -> Mark {
+        func moved(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + delta.x, y: p.y + delta.y) }
+        switch self {
+        case .rectangle(let rect, let ink): return .rectangle(rect.offsetBy(dx: delta.x, dy: delta.y), ink)
+        case .arrow(let start, let end, let ink): return .arrow(moved(start), moved(end), ink)
+        case .pen(let points, let ink): return .pen(points.map(moved), ink)
+        case .text(let value, let origin, let ink): return .text(value, moved(origin), ink)
+        case .mosaic: return self
+        }
+    }
 
     func draw(in context: CGContext, background: CaptureImage) {
         context.saveGState()

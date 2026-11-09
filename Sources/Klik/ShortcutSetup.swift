@@ -38,7 +38,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         self.issue = issue
         self.language = language
         self.strings = AppStrings(language: language.resolve())
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: 620),
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: firstRun ? 620 : 540),
                               styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -288,8 +288,9 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         content.addArrangedSubview(label(title, size: 30, weight: .bold))
         content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: .secondaryLabelColor))
 
+        let settingsRows = stack(.vertical, spacing: 10)
+        let settingsControlWidth: CGFloat = 146
         if !reviewing {
-            let settingsRows = stack(.vertical, spacing: 10)
             let row = stack(.horizontal, spacing: 10)
             let words = stack(.vertical, spacing: 4)
             words.addArrangedSubview(label(strings(.language), weight: .semibold))
@@ -298,7 +299,9 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(spacer)
-            row.addArrangedSubview(languagePicker())
+            let languageControl = languagePicker()
+            languageControl.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            row.addArrangedSubview(languageControl)
             settingsRows.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
 
@@ -338,20 +341,51 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             picker.target = self
             picker.action = #selector(chooseHistoryLimit(_:))
             picker.setAccessibilityLabel(strings(.historyLimit))
+            picker.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
             historyRow.addArrangedSubview(picker)
             settingsRows.addArrangedSubview(historyRow)
             historyRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
 
-            let card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: settingsRows)
-            content.addArrangedSubview(card)
-            card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         }
 
-        let keys = stack(.vertical, spacing: 6)
-        keys.addArrangedSubview(label(strings(.shortcut), size: 11, weight: .semibold, color: .secondaryLabelColor))
+        let keys = stack(.vertical, spacing: 5)
+        keys.addArrangedSubview(label(strings(.shortcut), size: reviewing ? 11 : 14, weight: .semibold,
+                                     color: reviewing ? .secondaryLabelColor : .labelColor))
         let value = recording ? strings(.recording) : selected.title(using: strings)
-        keys.addArrangedSubview(label(value, size: recording ? 23 : 30, weight: .bold))
-        let card = SetupSurface(color: KlikTheme.keycap, cornerRadius: 14, content: keys)
+        keys.addArrangedSubview(label(value, size: reviewing ? (recording ? 23 : 30) : 16, weight: .semibold))
+        let keyContent: NSView
+        if reviewing {
+            keyContent = keys
+        } else {
+            let row = stack(.horizontal, spacing: 12)
+            row.addArrangedSubview(keys)
+            let spacer = NSView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            row.addArrangedSubview(spacer)
+            let actions = stack(.vertical, spacing: 5)
+            actions.alignment = .trailing
+            if recording {
+                actions.addArrangedSubview(button(strings(.cancelRecording), #selector(cancelRecording)))
+            } else {
+                actions.addArrangedSubview(button(strings(.recordShortcut), #selector(beginRecording)))
+                if !selected.matches(.defaultShortcut) {
+                    actions.addArrangedSubview(button(strings(.restoreDefault), #selector(restoreDefault)))
+                }
+            }
+            for control in actions.arrangedSubviews {
+                control.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            }
+            row.addArrangedSubview(actions)
+            keyContent = row
+        }
+        let card: SetupSurface
+        if reviewing {
+            card = SetupSurface(color: KlikTheme.keycap, cornerRadius: 14, content: keyContent)
+        } else {
+            settingsRows.addArrangedSubview(keyContent)
+            keyContent.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+            card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: settingsRows)
+        }
         content.addArrangedSubview(card)
         card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         if let issue {
@@ -363,16 +397,19 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             content.addArrangedSubview(label(strings(.reopenHint), size: 12, color: .secondaryLabelColor))
         }
 
-        if recording {
-            footer.addArrangedSubview(button(strings(.cancelRecording), #selector(cancelRecording)))
-        } else {
-            if !reviewing { footer.addArrangedSubview(button(strings(.practiceReplay), #selector(openPractice))) }
-            if !selected.matches(.defaultShortcut) {
-                footer.addArrangedSubview(button(strings(.restoreDefault), #selector(restoreDefault)))
+        if reviewing {
+            if recording {
+                footer.addArrangedSubview(button(strings(.cancelRecording), #selector(cancelRecording)))
+            } else {
+                if !selected.matches(.defaultShortcut) {
+                    footer.addArrangedSubview(button(strings(.restoreDefault), #selector(restoreDefault)))
+                }
+                footer.addArrangedSubview(button(strings(.recordShortcut), #selector(beginRecording)))
+                let action: UIKey = selected.matches(.defaultShortcut) ? .useDefault : .useShortcut
+                footer.addArrangedSubview(button(strings(action), #selector(finish), primary: true))
             }
-            footer.addArrangedSubview(button(strings(.recordShortcut), #selector(beginRecording)))
-            let action: UIKey = reviewing ? (selected.matches(.defaultShortcut) ? .useDefault : .useShortcut) : .done
-            footer.addArrangedSubview(button(strings(action), #selector(finish), primary: true))
+        } else if !recording {
+            footer.addArrangedSubview(button(strings(.done), #selector(finish), primary: true))
         }
     }
 

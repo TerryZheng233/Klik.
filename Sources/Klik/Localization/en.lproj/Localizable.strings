@@ -18,7 +18,7 @@
 "reopenHint" = "Reopen Klik. to change it anytime in Settings.";
 "cancelRecording" = "Cancel Recording";
 "restoreDefault" = "Restore Default";
-"recordShortcut" = "Record Shortcut…";
+"recordShortcut" = "Change Shortcut…";
 "useDefault" = "Use ⌥A";
 "useShortcut" = "Use This Shortcut";
 "shortcutModifierNeeded" = "Add ⌥, ⌃, or ⌘, or use a function key from F1 to F20.";
@@ -90,6 +90,8 @@
 "menuHistory" = "Recent Screenshots";
 "menuHistoryEmpty" = "No recent screenshots";
 "menuHistoryClear" = "Clear All";
+"historyClearTitle" = "Clear recent screenshots?";
+"historyClearBody" = "This removes all recent screenshots saved by Klik. on this Mac.";
 "menuQuit" = "Quit Klik.";
 "historyErrorTitle" = "Couldn’t access recent screenshots";
 "historyErrorBody" = "Check access to Klik.’s Application Support folder and try again.";

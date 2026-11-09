@@ -2,6 +2,9 @@ import AppKit
 
 enum KlikTheme {
     static let accent = NSColor(srgbRed: 0.76, green: 0.95, blue: 0.39, alpha: 1)
+    // Selection and its contrast halo stay legible over both bright and dark content.
+    static let selection = NSColor(srgbRed: 0.46, green: 0.65, blue: 0.32, alpha: 1)
+    static let selectionHalo = NSColor(srgbRed: 0.07, green: 0.10, blue: 0.07, alpha: 0.85)
     static let overlayInk = NSColor(srgbRed: 0.95, green: 0.96, blue: 0.93, alpha: 1)
     static let panelTint = NSColor(srgbRed: 0.09, green: 0.11, blue: 0.10, alpha: 0.88)
     static let buttonSelected = NSColor(srgbRed: 0.27, green: 0.35, blue: 0.20, alpha: 1)

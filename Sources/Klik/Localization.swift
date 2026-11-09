@@ -126,6 +126,8 @@ enum UIKey: String, CaseIterable {
     case menuHistory
     case menuHistoryEmpty
     case menuHistoryClear
+    case historyClearTitle
+    case historyClearBody
     case historyToday
     case historyYesterday
     case historyPreview

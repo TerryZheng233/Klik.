@@ -143,11 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let settings = NSButton(title: strings(.menuSettings), target: self, action: #selector(openSettings))
         settings.bezelStyle = .rounded
-        settings.frame = NSRect(x: 16, y: listHeight + 56, width: 165, height: 28)
+        let buttonWidth = (width - 32 - 8) / 2
+        settings.frame = NSRect(x: 16, y: listHeight + 56, width: buttonWidth, height: 28)
         content.addSubview(settings)
         let quit = NSButton(title: strings(.menuQuit), target: NSApp, action: #selector(NSApplication.terminate(_:)))
         quit.bezelStyle = .rounded
-        quit.frame = NSRect(x: 190, y: listHeight + 56, width: 94, height: 28)
+        quit.frame = NSRect(x: 16 + buttonWidth + 8, y: listHeight + 56, width: buttonWidth, height: 28)
         content.addSubview(quit)
         let controller = NSViewController()
         controller.view = content
@@ -219,12 +220,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @MainActor @objc private func clearHistory() {
-        do {
-            try history.clear()
-            historyIssue = false
-            refreshStatusPopover()
-        } catch {
-            showAlert(preferences.strings(.historyErrorTitle), preferences.strings(.historyErrorBody))
+        let strings = preferences.strings
+        let previous = NSWorkspace.shared.frontmostApplication
+        statusPopover.performClose(nil)
+        presentingAlert = true
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = strings(.historyClearTitle)
+        alert.informativeText = strings(.historyClearBody)
+        alert.addButton(withTitle: strings(.cancel))
+        alert.addButton(withTitle: strings(.menuHistoryClear))
+        NSApp.activate()
+        let confirmed = alert.runModal() == .alertSecondButtonReturn
+        presentingAlert = false
+        if confirmed {
+            do {
+                try history.clear()
+                historyIssue = false
+            } catch {
+                showAlert(strings(.historyErrorTitle), strings(.historyErrorBody))
+            }
+        }
+        if ownsForeground, let previous, previous.processIdentifier != NSRunningApplication.current.processIdentifier,
+           !previous.isTerminated {
+            NSApp.yieldActivation(to: previous)
+            previous.activate(from: .current, options: [])
         }
     }
 

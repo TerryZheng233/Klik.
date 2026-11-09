@@ -65,7 +65,11 @@ final class CapturePanel: NSPanel {
             }
             let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
             if !composing, key == kVK_Return || key == kVK_ANSI_KeypadEnter {
-                canvas.export(.clipboard)
+                if canvas.isEditingText {
+                    canvas.finishTextEditing()
+                } else {
+                    canvas.export(.clipboard)
+                }
                 return
             }
 
@@ -132,13 +136,16 @@ private final class CaptureMagnifier: NSView {
         source.draw(in: context)
         context.restoreGState()
 
-        NSColor(srgbRed: 0.19, green: 0.65, blue: 1, alpha: 0.9).setStroke()
         let crosshair = NSBezierPath()
-        crosshair.lineWidth = 1
         crosshair.move(to: NSPoint(x: bounds.midX, y: 0))
         crosshair.line(to: NSPoint(x: bounds.midX, y: bounds.height))
         crosshair.move(to: NSPoint(x: 0, y: bounds.midY))
         crosshair.line(to: NSPoint(x: bounds.width, y: bounds.midY))
+        KlikTheme.selectionHalo.setStroke()
+        crosshair.lineWidth = 3
+        crosshair.stroke()
+        KlikTheme.selection.setStroke()
+        crosshair.lineWidth = 1
         crosshair.stroke()
         NSColor.separatorColor.setStroke()
         outline.lineWidth = 1
@@ -174,6 +181,9 @@ private final class CaptureView: NSView {
         case select(CGPoint, moved: Bool, target: ClickTarget)
         case resize(Selection.Handle, CGRect, CGPoint)
         case move(CGRect, CGPoint)
+        case moveMark(Int, Mark, CGPoint, [Mark])
+        case resizeArrow(Int, Mark, Bool, CGPoint, [Mark])
+        case resizeMark(Int, Mark, Selection.Handle, CGPoint, [Mark])
         case mark(Tool, CGPoint)
     }
 
@@ -232,7 +242,9 @@ private final class CaptureView: NSView {
     private(set) var isWindowSnapHeld = false
     private var hoveredWindow: CGRect?
     private var marks: [Mark] = []
-    private var undoneMarks: [Mark] = []
+    private var undoMarks: [[Mark]] = []
+    private var redoMarks: [[Mark]] = []
+    private var selectedMark: Int?
     private var preview: Mark?
     private var drag: Drag?
     private var strokePoints: [CGPoint] = []
@@ -358,10 +370,25 @@ private final class CaptureView: NSView {
             next = .resize(handle)
         } else if case .move = drag {
             next = .closedHand
+        } else if case .moveMark = drag {
+            next = .closedHand
+        } else if case .resizeArrow = drag {
+            next = .closedHand
+        } else if case .resizeMark(_, _, let handle, _, _) = drag {
+            next = .resize(handle)
         } else if drag == nil, let selection, let handle = Selection.Handle.hit(
             at: point, in: selection, retaining: pointer?.resizeHandle
         ) {
             next = .resize(handle)
+        } else if drag == nil, let index = selectedMark, marks.indices.contains(index),
+                  case .rectangle(let rect, _) = marks[index],
+                  let handle = Selection.Handle.hit(at: point, in: rect) {
+            next = .resize(handle)
+        } else if drag == nil, let index = selectedMark, marks.indices.contains(index),
+                  case .rectangle(let rect, _) = marks[index], rect.contains(point) {
+            next = .openHand
+        } else if drag == nil, selection?.contains(point) == true, markIndex(at: point) != nil {
+            next = .openHand
         } else if drag == nil, tool == nil, let selection, selection.contains(point) {
             next = .openHand
         } else {
@@ -416,17 +443,53 @@ private final class CaptureView: NSView {
             context.clip(to: active)
             for mark in marks { mark.draw(in: context, background: background) }
             preview?.draw(in: context, background: background)
+            if let selectedMark, marks.indices.contains(selectedMark) {
+                let mark = marks[selectedMark]
+                if case .arrow(let start, let end, _) = mark {
+                    for point in [start, end] {
+                        let dot = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
+                        context.setFillColor(KlikTheme.selection.cgColor)
+                        context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+                        context.setLineWidth(1.5)
+                        context.fillEllipse(in: dot)
+                        context.strokeEllipse(in: dot)
+                    }
+                } else if case .rectangle(let rect, _) = mark {
+                    for handle in Selection.Handle.allCases {
+                        let point = handle.center(in: rect)
+                        let dot = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
+                        context.setFillColor(KlikTheme.selection.cgColor)
+                        context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+                        context.setLineWidth(1.5)
+                        context.fillEllipse(in: dot)
+                        context.strokeEllipse(in: dot)
+                    }
+                } else if let rect = mark.movableBounds {
+                    context.setLineDash(phase: 0, lengths: [4, 3])
+                    context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+                    context.setLineWidth(3)
+                    context.stroke(rect.insetBy(dx: -5, dy: -5))
+                    context.setStrokeColor(KlikTheme.selection.cgColor)
+                    context.setLineWidth(1)
+                    context.stroke(rect.insetBy(dx: -5, dy: -5))
+                    context.setLineDash(phase: 0, lengths: [])
+                }
+            }
             context.restoreGState()
         }
-        let outline = NSColor(srgbRed: 0.19, green: 0.65, blue: 1, alpha: 1).cgColor
-        context.setStrokeColor(outline)
+        context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+        context.setLineWidth(3.5)
+        context.stroke(active)
+        context.setStrokeColor(KlikTheme.selection.cgColor)
         context.setLineWidth(1.5)
         context.stroke(active)
         if selection != nil, draftSelection == nil {
             for handle in Selection.Handle.allCases {
                 let center = handle.center(in: active)
                 let dot = CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6)
-                context.setFillColor(NSColor.white.cgColor)
+                context.setFillColor(KlikTheme.selection.cgColor)
+                context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+                context.setLineWidth(1.2)
                 context.fillEllipse(in: dot)
                 context.strokeEllipse(in: dot)
             }
@@ -446,7 +509,27 @@ private final class CaptureView: NSView {
                                                              retaining: pointer?.resizeHandle) {
             drag = .resize(handle, selection, point)
         } else if let selection, selection.contains(point) {
-            switch tool {
+            if let index = selectedMark, marks.indices.contains(index),
+               case .rectangle(let rect, _) = marks[index],
+               let handle = Selection.Handle.hit(at: point, in: rect) {
+                drag = .resizeMark(index, marks[index], handle, point, marks)
+            } else if let index = selectedMark, marks.indices.contains(index),
+                      case .rectangle(let rect, _) = marks[index], rect.contains(point) {
+                drag = .moveMark(index, marks[index], point, marks)
+            } else if let index = markIndex(at: point) {
+                selectedMark = index
+                let mark = marks[index]
+                if case .arrow(let start, let end, _) = mark,
+                   min(hypot(point.x - start.x, point.y - start.y),
+                       hypot(point.x - end.x, point.y - end.y)) <= 10 {
+                    let isStart = hypot(point.x - start.x, point.y - start.y) <= hypot(point.x - end.x, point.y - end.y)
+                    drag = .resizeArrow(index, mark, isStart, point, marks)
+                } else {
+                    drag = .moveMark(index, mark, point, marks)
+                }
+            } else {
+                selectedMark = nil
+                switch tool {
             case .text:
                 beginText(at: point, in: selection)
             case .some(let tool):
@@ -457,6 +540,7 @@ private final class CaptureView: NSView {
                 }
             case .none:
                 drag = .move(selection, point)
+                }
             }
         } else {
             let target: ClickTarget = isWindowSnapHeld
@@ -520,6 +604,15 @@ private final class CaptureView: NSView {
                 replaceSelection(with: draftSelection)
             }
         }
+        switch drag {
+        case .moveMark(let index, _, _, let before), .resizeArrow(let index, _, _, _, let before),
+             .resizeMark(let index, _, _, _, let before):
+            if before.indices.contains(index), marks.indices.contains(index), before[index] != marks[index] {
+                undoMarks.append(before)
+                redoMarks.removeAll()
+            }
+        default: break
+        }
         if let preview { addMark(preview) }
         self.drag = nil
         draftSelection = nil
@@ -532,7 +625,9 @@ private final class CaptureView: NSView {
         self.windowImage = windowImage
         selection = rect
         marks.removeAll()
-        undoneMarks.removeAll()
+        undoMarks.removeAll()
+        redoMarks.removeAll()
+        selectedMark = nil
         choose(nil)
     }
 
@@ -600,6 +695,30 @@ private final class CaptureView: NSView {
             selection = handle.resize(original, delta: delta, in: windowImage?.frame ?? bounds)
         case .move(let original, let start):
             selection = Selection.move(original, from: start, to: point, in: windowImage?.frame ?? bounds)
+        case .moveMark(let index, let original, let start, _):
+            guard marks.indices.contains(index), let selection, let frame = original.movableBounds else { return }
+            var dx = point.x - start.x, dy = point.y - start.y
+            if frame.width <= selection.width {
+                dx = max(selection.minX - frame.minX, min(dx, selection.maxX - frame.maxX))
+            }
+            if frame.height <= selection.height {
+                dy = max(selection.minY - frame.minY, min(dy, selection.maxY - frame.maxY))
+            }
+            marks[index] = original.translated(by: CGPoint(x: dx, y: dy))
+        case .resizeMark(let index, let original, let handle, let grabPoint, _):
+            guard marks.indices.contains(index), let selection,
+                  case .rectangle(let rect, let ink) = original else { return }
+            let delta = CGPoint(x: point.x - grabPoint.x, y: point.y - grabPoint.y)
+            marks[index] = .rectangle(handle.resize(rect, delta: delta, in: selection), ink)
+        case .resizeArrow(let index, let original, let isStart, let grabPoint, _):
+            guard marks.indices.contains(index), let selection,
+                  case .arrow(let start, let end, let ink) = original else { return }
+            let endpoint = isStart ? start : end
+            let moved = CGPoint(x: endpoint.x + point.x - grabPoint.x,
+                                y: endpoint.y + point.y - grabPoint.y)
+            let clamped = CGPoint(x: min(max(moved.x, selection.minX), selection.maxX),
+                                  y: min(max(moved.y, selection.minY), selection.maxY))
+            marks[index] = .arrow(isStart ? clamped : start, isStart ? end : clamped, ink)
         case .mark(let tool, let start):
             guard let selection else { return }
             let end = CGPoint(x: min(max(point.x, selection.minX), selection.maxX),
@@ -817,8 +936,8 @@ private final class CaptureView: NSView {
             toolbar.isHidden = true
             palette.isHidden = true
         }
-        undoButton.isEnabled = !marks.isEmpty || isEditingText
-        redoButton.isEnabled = !undoneMarks.isEmpty && !isEditingText
+        undoButton.isEnabled = !undoMarks.isEmpty || isEditingText
+        redoButton.isEnabled = !redoMarks.isEmpty && !isEditingText
         if let coach {
             if drag != nil || isEditingText || windowCaptureTask != nil || !errorLabel.isHidden {
                 coach.hide()
@@ -887,20 +1006,42 @@ private final class CaptureView: NSView {
         field.removeFromSuperview()
     }
 
+    private func markIndex(at point: CGPoint) -> Int? {
+        marks.indices.reversed().first { marks[$0].hitTest(point) }
+    }
+
+    func finishTextEditing() {
+        commitText()
+        refresh()
+    }
+
     private func addMark(_ mark: Mark) {
+        undoMarks.append(marks)
         marks.append(mark)
-        undoneMarks.removeAll()
+        redoMarks.removeAll()
+        switch mark {
+        case .arrow, .rectangle: selectedMark = marks.count - 1
+        default: selectedMark = nil
+        }
     }
 
     @objc func undo() {
         commitText()
-        if let mark = marks.popLast() { undoneMarks.append(mark) }
+        if let prior = undoMarks.popLast() {
+            redoMarks.append(marks)
+            marks = prior
+            selectedMark = nil
+        }
         refresh()
     }
 
     @objc func redo() {
         guard !isEditingText else { return }
-        if let mark = undoneMarks.popLast() { marks.append(mark) }
+        if let next = redoMarks.popLast() {
+            undoMarks.append(marks)
+            marks = next
+            selectedMark = nil
+        }
         refresh()
     }
 

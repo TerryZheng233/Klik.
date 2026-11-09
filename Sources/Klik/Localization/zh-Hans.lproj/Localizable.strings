@@ -18,7 +18,7 @@
 "reopenHint" = "以后随时可以重新打开 Klik.，在设置里改键。";
 "cancelRecording" = "取消录制";
 "restoreDefault" = "恢复默认";
-"recordShortcut" = "录制快捷键…";
+"recordShortcut" = "更改快捷键…";
 "useDefault" = "使用 ⌥A";
 "useShortcut" = "使用这组快捷键";
 "shortcutModifierNeeded" = "请加上 ⌥、⌃ 或 ⌘，也可以使用 F1 到 F20。";
@@ -90,6 +90,8 @@
 "menuHistory" = "最近截图";
 "menuHistoryEmpty" = "暂无最近截图";
 "menuHistoryClear" = "清空";
+"historyClearTitle" = "清空最近截图？";
+"historyClearBody" = "这会删除 Klik. 在这台 Mac 上保存的所有最近截图。";
 "menuQuit" = "退出 Klik.";
 "historyErrorTitle" = "无法访问最近截图";
 "historyErrorBody" = "请检查 Klik. 的应用支持文件夹访问权限，然后重试。";

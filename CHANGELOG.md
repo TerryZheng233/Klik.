@@ -2,6 +2,22 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## Unreleased / 尚未发布
+
+**English**
+
+- Move boxes, arrows, text, and pen marks after drawing. Resize boxes with their handles and adjust arrows by dragging either endpoint.
+- Press Enter once to finish editing text, then again to copy the screenshot.
+- Updated the selection colours, simplified shortcut settings, and aligned the menu and settings controls.
+- Ask for confirmation before clearing recent screenshots.
+
+**简体中文**
+
+- 框、箭头、文字和画笔标注可以拖动；可拖动矩形边角调整大小，或拖动箭头端点调整长度和方向。
+- 输入文字时，按一次 Enter 确认文字，再按一次复制截图。
+- 统一选区配色，简化快捷键设置，并对齐菜单和设置中的控件。
+- 清空最近截图前会先确认。
+
 ## 0.1.16 — 2026-11-09
 
 **English**
