@@ -10,7 +10,7 @@ final class CapturePanel: NSPanel {
          guided: Bool = false, finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
                              strings: strings, guided: guided, finish: finish)
-        super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
+        super.init(contentRect: frame, styleMask: .borderless,
                    backing: .buffered, defer: false)
         isFloatingPanel = true
         hidesOnDeactivate = false
@@ -30,12 +30,9 @@ final class CapturePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     func present() -> Bool {
-        canvas.updatePointer(at: mouseLocationOutsideOfEventStream)
         makeKeyAndOrderFront(nil)
-        guard isKeyWindow else {
-            canvas.clearPointer()
-            return false
-        }
+        guard isKeyWindow else { return false }
+        canvas.updatePointer(at: mouseLocationOutsideOfEventStream)
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isVisible, self.isKeyWindow else { return }
             self.canvas.updatePointer(at: self.mouseLocationOutsideOfEventStream, force: true)
@@ -103,7 +100,7 @@ private final class CaptureView: NSView {
     enum Destination { case clipboard, downloads }
 
     private enum Drag {
-        case select(CGPoint)
+        case select(CGPoint, moved: Bool)
         case resize(Selection.Handle, CGRect, CGPoint)
         case move(CGRect, CGPoint)
         case mark(Tool, CGPoint)
@@ -317,7 +314,7 @@ private final class CaptureView: NSView {
                 drag = .move(selection, point)
             }
         } else {
-            drag = .select(point)
+            drag = .select(point, moved: false)
             draftSelection = CGRect(origin: point, size: .zero)
         }
         refresh()
@@ -329,13 +326,15 @@ private final class CaptureView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard let drag else { return }
+        guard drag != nil else { return }
         updateDrag(at: mousePoint(event))
-        if case .select = drag, let draftSelection,
-           draftSelection.width >= Selection.minimum, draftSelection.height >= Selection.minimum {
-            selection = draftSelection
-            marks.removeAll()
-            choose(nil)
+        if case .select(_, let moved) = drag, let draftSelection {
+            let fullDisplay = !moved && selection == nil
+            if fullDisplay || (draftSelection.width >= Selection.minimum && draftSelection.height >= Selection.minimum) {
+                selection = fullDisplay ? bounds : draftSelection
+                marks.removeAll()
+                choose(nil)
+            }
         }
         if let preview { marks.append(preview) }
         self.drag = nil
@@ -353,8 +352,12 @@ private final class CaptureView: NSView {
 
     private func updateDrag(at point: CGPoint) {
         switch drag {
-        case .select(let start):
-            draftSelection = Selection.between(start, point)
+        case .select(let start, let moved):
+            let draft = Selection.between(start, point)
+            draftSelection = draft
+            if !moved, max(draft.width, draft.height) > 3 {
+                drag = .select(start, moved: true)
+            }
         case .resize(let handle, let original, let start):
             let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
             selection = handle.resize(original, delta: delta, in: bounds)

@@ -65,8 +65,8 @@
 "practiceShortcutFallback" = "%@ 暂不可用。可以先点「开始练习」，完成后再换一组快捷键。";
 "practiceReplay" = "练习截图…";
 "practicePermissionBody" = "在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」开启 Klik.。若系统提示重新打开，请照做，再回到引导继续练习。";
-"practiceSelectTitle" = "拖动鼠标框选一块区域";
-"practiceSelectDetail" = "松开鼠标就能看到工具栏。拖动选区边缘或角可以微调。";
+"practiceSelectTitle" = "拖动框选，单击选中整块显示器";
+"practiceSelectDetail" = "用工具栏添加标注。拖动选区边缘或角可以微调。";
 "practiceStep" = "%d / %d";
 "practiceHideTips" = "收起提示";
 "practiceRectangle" = "在选区内拖动，用矩形框出重点。";

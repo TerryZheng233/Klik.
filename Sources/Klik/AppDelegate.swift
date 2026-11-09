@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidResignActive(_ notification: Notification) {
-        if overlay?.isVisible == true { closeCapture(restoreFocus: false) }
+        if captureTask == nil, overlay?.isVisible == true { closeCapture(restoreFocus: false) }
     }
 
     @MainActor
@@ -132,15 +132,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let foreground = NSWorkspace.shared.frontmostApplication
         previousForegroundApp = foreground?.processIdentifier == NSRunningApplication.current.processIdentifier
             ? nil : foreground
-        // A key panel alone does not own the system pointer while another app is foreground.
+        // App activation and the key-window handoff can complete on different run-loop turns.
         NSApp.activate()
-        for _ in 0..<20 {
-            if ownsForeground { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
         overlay = panel
-        return panel.present()
+        for _ in 0..<24 {
+            if ownsForeground, NSApp.isActive, panel.present() { return true }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return false
     }
 
     private static func snapshot(displayID: CGDirectDisplayID, pointSize: CGSize, scale: CGFloat) async throws -> CGImage {

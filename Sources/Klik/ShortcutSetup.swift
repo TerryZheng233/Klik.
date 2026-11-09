@@ -63,8 +63,8 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             startPractice(self)
             return true
         }
-        guard window?.isKeyWindow == true else { return false }
-        if recordingMonitor != nil { accept(shortcut) }
+        guard window?.isKeyWindow == true, recordingMonitor != nil else { return false }
+        accept(shortcut)
         return true
     }
 
