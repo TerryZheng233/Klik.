@@ -18,7 +18,9 @@ I like how easy it is to take a screenshot in WeChat. But by default, confirming
 
 I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. If I want a file, I can save a PNG to Downloads.
 
-![A Wikipedia page about leap years with February 29 marked by a red box and arrow.](docs/klik-preview.png)
+![A restaurant booking in Safari selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-preview.png)
+
+A dinner plan to send to a friend: highlight the time, cover the contact details, and copy.
 
 ## Choose what to capture
 
