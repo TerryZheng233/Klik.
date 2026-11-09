@@ -37,7 +37,12 @@ installed_app="$destination/Klik.app"
 replace_existing=false
 if [[ -e "$installed_app" ]]; then
     requirement="$(/usr/bin/codesign -d -r- "$installed_app" 2>&1 | /usr/bin/sed -n 's/^designated => //p')"
-    if [[ -n "$requirement" ]] && ! /usr/bin/codesign --verify -R "=$requirement" "$app"; then
+    # Ad hoc designated requirements include a build-specific hash, so two
+    # valid ad hoc builds cannot satisfy one another's requirement.
+    existing_signing="$(/usr/bin/codesign -dv --verbose=2 "$installed_app" 2>&1)"
+    if [[ "$existing_signing" == *"Signature=adhoc"* && "${identity:--}" == "-" ]]; then
+        /usr/bin/codesign --verify --strict "$installed_app"
+    elif [[ -n "$requirement" ]] && ! /usr/bin/codesign --verify -R "=$requirement" "$app"; then
         printf '%s\n' 'The update has a different signing identity. Use the existing signing identity or build to a new destination.' >&2
         exit 1
     fi

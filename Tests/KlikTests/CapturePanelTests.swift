@@ -317,6 +317,27 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
+    func testEscapeDuringCompositionGoesToTextInputInsteadOfCancellingCapture() throws {
+        _ = NSApplication.shared
+        var outcome: CapturePanel.Outcome?
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage()) { outcome = $0 }
+        defer { panel.orderOut(nil) }
+        let editor = CompositionTestEditor(frame: .zero)
+        panel.contentView?.addSubview(editor)
+        XCTAssertTrue(panel.makeFirstResponder(editor))
+        let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\u{1b}",
+            charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: UInt16(kVK_Escape)))
+        panel.sendEvent(escape)
+        XCTAssertNil(outcome)
+        XCTAssertTrue(editor.receivedEscape)
+        editor.composing = false
+        panel.sendEvent(escape)
+        XCTAssertEqual(outcome, .cancelled)
+    }
+
+    @MainActor
     func testEnterFinishesTextBeforeCopyingScreenshot() throws {
         _ = NSApplication.shared
         let board = NSPasteboard.withUniqueName()
@@ -433,4 +454,11 @@ final class CapturePanelTests: XCTestCase {
                                              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
         return try XCTUnwrap(context.makeImage())
     }
+}
+
+private final class CompositionTestEditor: NSTextView {
+    var composing = true
+    var receivedEscape = false
+    override func hasMarkedText() -> Bool { composing }
+    override func keyDown(with event: NSEvent) { receivedEscape = Int(event.keyCode) == kVK_Escape }
 }

@@ -59,11 +59,11 @@ final class CapturePanel: NSPanel {
         }
         if event.type == .keyDown {
             let key = Int(event.keyCode)
-            if key == kVK_Escape {
+            let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
+            if key == kVK_Escape && !composing {
                 canvas.cancel()
                 return
             }
-            let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
             if !composing, key == kVK_Return || key == kVK_ANSI_KeypadEnter {
                 if canvas.isEditingText {
                     canvas.finishTextEditing()

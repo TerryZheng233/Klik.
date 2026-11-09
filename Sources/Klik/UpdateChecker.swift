@@ -4,7 +4,7 @@ struct UpdateChecker {
     static let releasePage = URL(string: "https://github.com/TerryZheng233/Klik./releases/latest")!
     private static let apiURL = URL(string: "https://api.github.com/repos/TerryZheng233/Klik./releases/latest")!
 
-    struct Asset: Equatable { let url: URL; let sha256: String }
+    struct Asset: Equatable { let url: URL; let sha256: String; let signatureURL: URL }
 
     enum Result: Equatable {
         case upToDate
@@ -48,7 +48,14 @@ struct UpdateChecker {
                       hex.allSatisfy({ $0.isHexDigit && $0.isASCII }) else {
                     return .available(release.tag_name, nil)
                 }
-                return .available(release.tag_name, Asset(url: asset.browser_download_url, sha256: hex.lowercased()))
+                let signatureName = expectedName + ".sig"
+                guard let signature = release.assets?.first(where: { $0.name == signatureName &&
+                    $0.browser_download_url.scheme == "https" && $0.browser_download_url.host == "github.com" &&
+                    $0.browser_download_url.path == "/TerryZheng233/Klik./releases/download/\(release.tag_name)/\(signatureName)" }) else {
+                    return .available(release.tag_name, nil)
+                }
+                return .available(release.tag_name, Asset(url: asset.browser_download_url,
+                    sha256: hex.lowercased(), signatureURL: signature.browser_download_url))
             }
             if lhs < rhs { return .upToDate }
         }

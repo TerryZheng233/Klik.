@@ -123,7 +123,7 @@
 "updateDownloadedTitle" = "Download complete";
 "updateDownloadedBody" = "The installer is in your Downloads folder. Open it and follow the installation steps to update Klik.";
 "updateDownloadErrorTitle" = "Couldn’t install the update";
-"updateDownloadErrorBody" = "Check your internet connection and that Klik can be updated in its current location, then try again. You can also open the release page.";
+"updateDownloadErrorBody" = "Klik couldn’t verify or install the update. Check your internet connection and that Klik can be updated in its current location, then try again. You can also open the release page.";
 "showInFinder" = "Show in Finder";
 
-"updateAvailableFallbackBody" = "Klik. %@ is available. Open the release page to download it.";
+"updateAvailableFallbackBody" = "Klik. %@ is available, but a signed installer could not be found. Open the release page for details.";

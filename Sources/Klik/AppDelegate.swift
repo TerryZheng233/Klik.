@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if preferences.savedShortcut == nil || shortcutIssue != nil {
             showSetup(issue: shortcutIssue)
         }
+        UpdateStartup.confirmAfterStartup()
     }
 
     @MainActor @objc private func toggleStatusPopover() {

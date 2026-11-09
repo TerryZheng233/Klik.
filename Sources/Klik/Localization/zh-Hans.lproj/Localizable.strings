@@ -123,7 +123,7 @@
 "updateDownloadedTitle" = "下载完成";
 "updateDownloadedBody" = "安装包已保存到「下载」文件夹。打开安装包并按照提示更新 Klik。";
 "updateDownloadErrorTitle" = "无法安装更新";
-"updateDownloadErrorBody" = "请检查网络，并确认 Klik 有权限更新当前位置的应用后重试。你也可以打开发布页面。";
+"updateDownloadErrorBody" = "Klik 无法验证或安装更新。请检查网络，并确认 Klik 有权限更新当前位置的应用后重试。你也可以打开发布页面。";
 "showInFinder" = "在 Finder 中显示";
 
-"updateAvailableFallbackBody" = "Klik. %@ 已发布，请打开发布页面下载。";
+"updateAvailableFallbackBody" = "Klik. %@ 已发布，但没有找到经过签名的安装包。请打开发布页面查看详情。";

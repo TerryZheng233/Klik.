@@ -26,6 +26,14 @@ enum UpdateInstaller {
         let data = try Data(contentsOf: download, options: .mappedIfSafe)
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         guard hash == asset.sha256 else { throw URLError(.cannotDecodeContentData) }
+        var signatureRequest = URLRequest(url: asset.signatureURL, timeoutInterval: 30)
+        signatureRequest.setValue("Klik-Updater", forHTTPHeaderField: "User-Agent")
+        let (signature, signatureResponse) = try await URLSession.shared.data(for: signatureRequest)
+        guard let signatureHTTP = signatureResponse as? HTTPURLResponse, (200...299).contains(signatureHTTP.statusCode),
+              UpdateSignature.verify(signature: signature, version: version,
+                                     filename: asset.url.lastPathComponent, sha256: hash) else {
+            throw URLError(.cannotDecodeContentData)
+        }
 
         let temporary = fm.temporaryDirectory.appendingPathComponent("klik-update-\(UUID().uuidString)", isDirectory: true)
         let mount = temporary.appendingPathComponent("mount", isDirectory: true)
@@ -52,26 +60,42 @@ enum UpdateInstaller {
         return Prepared(app: app, staged: staged, backup: backup)
     }
 
-    static func installAfterExit(_ prepared: Prepared) throws {
-        // Paths are arguments rather than interpolated shell text. Keep the old
-        // app until the replacement has been placed and Launch Services accepts it.
-        let script = #"""
-        pid="$1"; app="$2"; staged="$3"; backup="$4"
-        while /bin/kill -0 "$pid" 2>/dev/null; do /bin/sleep 0.2; done
-        if ! /bin/mv "$app" "$backup"; then /bin/rm -rf "$staged"; /usr/bin/open -n "$app"; exit 1; fi
-        if ! /bin/mv "$staged" "$app"; then /bin/mv "$backup" "$app"; /usr/bin/open -n "$app"; exit 1; fi
-        if /usr/bin/open -n "$app"; then
-          /bin/rm -rf "$backup"
-        else
-          /bin/mv "$app" "$staged"
-          /bin/mv "$backup" "$app"
-          /usr/bin/open -n "$app"
+    static let helperScript = #"""
+    pid="$1"; app="$2"; staged="$3"; backup="$4"; opener="$5"; token="$6"
+    marker="${app%/*}/$token"; limit="${7:-150}"
+    while /bin/kill -0 "$pid" 2>/dev/null; do /bin/sleep 0.2; done
+    if ! /bin/mv "$app" "$backup"; then /bin/rm -rf "$staged"; "$opener" -n "$app"; exit 1; fi
+    if ! /bin/mv "$staged" "$app"; then /bin/mv "$backup" "$app"; "$opener" -n "$app"; exit 1; fi
+    "$opener" -n -W "$app" --args --klik-update-confirm "$token" &
+    runner=$!
+    attempts=0
+    while [ "$attempts" -lt "$limit" ]; do
+      if [ -f "$marker" ] && /bin/kill -0 "$runner" 2>/dev/null; then
+        /bin/rm -f "$marker"
+        /bin/rm -rf "$backup"
+        exit 0
+      fi
+      if ! /bin/kill -0 "$runner" 2>/dev/null; then
+        /bin/rm -f "$marker"
+        if /bin/mv "$app" "$staged" && /bin/mv "$backup" "$app"; then
+          "$opener" -n "$app"
           /bin/rm -rf "$staged"
         fi
-        """#
+        exit 1
+      fi
+      attempts=$((attempts + 1))
+      /bin/sleep 0.2
+    done
+    # A slow or blocked launch is not proof of a crash. Keep the backup.
+    exit 1
+    """#
+
+    static func installAfterExit(_ prepared: Prepared) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script, "klik-updater", String(ProcessInfo.processInfo.processIdentifier), prepared.app.path, prepared.staged.path, prepared.backup.path]
+        let token = UpdateStartup.prefix + UUID().uuidString
+        process.arguments = ["-c", helperScript, "klik-updater", String(ProcessInfo.processInfo.processIdentifier),
+                             prepared.app.path, prepared.staged.path, prepared.backup.path, "/usr/bin/open", token]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()

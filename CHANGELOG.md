@@ -2,6 +2,20 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.19 — 2026-11-09
+
+**English**
+
+- Verify update packages with an independent Ed25519 signature and retain a backup until the new version confirms startup.
+- Allow repeated ad hoc builds in the same output directory.
+- Let an input method handle Escape while composing text, instead of cancelling the screenshot.
+
+**简体中文**
+
+- 使用独立的 Ed25519 签名验证更新包，待新版确认启动后再清理旧版备份。
+- 允许在同一输出目录重复构建临时签名版本。
+- 输入法正在组合文字时，Esc 交由输入法处理，不再直接取消截图。
+
 ## 0.1.18 — 2026-11-09
 
 **English**
