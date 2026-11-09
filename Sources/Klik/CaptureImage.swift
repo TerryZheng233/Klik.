@@ -121,19 +121,19 @@ final class CaptureImage {
     let size: CGSize
     let origin: CGPoint
     var frame: CGRect { CGRect(origin: origin, size: size) }
-    private let pixelated: CGImage?
+    private lazy var pixelated: CGImage? = {
+        // One sample per roughly 14 points. Upscaling with nearest neighbour gives visible blocks.
+        guard let reduced = Self.bitmap(width: max(1, Int(size.width / 14)),
+                                        height: max(1, Int(size.height / 14))) else { return nil }
+        reduced.interpolationQuality = .high
+        reduced.draw(image, in: CGRect(x: 0, y: 0, width: reduced.width, height: reduced.height))
+        return reduced.makeImage()
+    }()
 
     init(image: CGImage, size: CGSize, origin: CGPoint = .zero) {
         self.image = image
         self.size = size
         self.origin = origin
-        // One sample per roughly 14 points. Upscaling with nearest neighbour gives visible blocks.
-        let reduced = Self.bitmap(width: max(1, Int(size.width / 14)), height: max(1, Int(size.height / 14)))
-        reduced?.interpolationQuality = .high
-        if let reduced {
-            reduced.draw(image, in: CGRect(x: 0, y: 0, width: reduced.width, height: reduced.height))
-        }
-        pixelated = reduced?.makeImage()
     }
 
     func draw(in context: CGContext) {
@@ -164,8 +164,10 @@ final class CaptureImage {
         let pixels = selection.offsetBy(dx: -origin.x, dy: -origin.y)
             .applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
             .integral.intersection(pixelBounds)
-        guard !pixels.isEmpty, let crop = image.cropping(to: pixels),
-              let context = Self.bitmap(width: crop.width, height: crop.height) else { return nil }
+        guard !pixels.isEmpty, let crop = image.cropping(to: pixels) else { return nil }
+        // Unmarked captures can keep the source pixels and colour profile as-is.
+        if marks.isEmpty { return crop }
+        guard let context = Self.bitmap(width: crop.width, height: crop.height) else { return nil }
 
         context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
         context.translateBy(x: 0, y: CGFloat(crop.height))

@@ -8,10 +8,11 @@ final class CapturePanel: NSPanel {
 
     init(frame: CGRect, image: CGImage, windowTargets: [WindowSnap] = [], strings: AppStrings = AppStrings(),
          guided: Bool = false, captureWindow: ((CGWindowID) async throws -> CGImage)? = nil,
+         pasteboard: NSPasteboard = .general,
          finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
                              windowTargets: windowTargets, strings: strings, guided: guided,
-                             captureWindow: captureWindow, finish: finish)
+                             captureWindow: captureWindow, pasteboard: pasteboard, finish: finish)
         super.init(contentRect: frame, styleMask: .borderless,
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -115,8 +116,13 @@ private enum Tool: CaseIterable {
 private final class CaptureView: NSView {
     enum Destination { case clipboard, downloads }
 
+    private enum ClickTarget {
+        case display
+        case window(WindowSnap?)
+    }
+
     private enum Drag {
-        case select(CGPoint, moved: Bool, window: WindowSnap?)
+        case select(CGPoint, moved: Bool, target: ClickTarget)
         case resize(Selection.Handle, CGRect, CGPoint)
         case move(CGRect, CGPoint)
         case mark(Tool, CGPoint)
@@ -148,6 +154,10 @@ private final class CaptureView: NSView {
     private let windowTargets: [WindowSnap]
     private let captureWindow: ((CGWindowID) async throws -> CGImage)?
     private var windowCaptureTask: Task<Void, Never>?
+    private var lastWindowClick: WindowSnap?
+    private var doubleClickStart: CGPoint?
+    private var copyWhenWindowReady = false
+    private let pasteboard: NSPasteboard
     private let strings: AppStrings
     private let finish: (CapturePanel.Outcome) -> Void
     private let coach: CaptureCoach?
@@ -183,10 +193,12 @@ private final class CaptureView: NSView {
 
     init(background: CaptureImage, windowTargets: [WindowSnap], strings: AppStrings, guided: Bool,
          captureWindow: ((CGWindowID) async throws -> CGImage)?,
+         pasteboard: NSPasteboard,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.desktop = background
         self.windowTargets = windowTargets
         self.captureWindow = captureWindow
+        self.pasteboard = pasteboard
         self.strings = strings
         self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
@@ -233,6 +245,9 @@ private final class CaptureView: NSView {
     func cancelWindowCapture() {
         windowCaptureTask?.cancel()
         windowCaptureTask = nil
+        lastWindowClick = nil
+        doubleClickStart = nil
+        copyWhenWindowReady = false
     }
 
     override func updateTrackingAreas() {
@@ -353,12 +368,14 @@ private final class CaptureView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let point = mousePoint(event)
+        doubleClickStart = event.clickCount == 2 ? point : nil
+        if event.clickCount == 1, windowCaptureTask == nil { lastWindowClick = nil }
         guard windowCaptureTask == nil else { return }
         showPalette = false
         commitText()
         window?.makeFirstResponder(self)
         errorLabel.isHidden = true
-        let point = mousePoint(event)
         if let selection, let handle = Selection.Handle.hit(at: point, in: selection,
                                                              retaining: pointer?.resizeHandle) {
             drag = .resize(handle, selection, point)
@@ -376,8 +393,9 @@ private final class CaptureView: NSView {
                 drag = .move(selection, point)
             }
         } else {
-            let window = isWindowSnapHeld ? WindowSnap.target(at: point, in: windowTargets) : nil
-            drag = .select(point, moved: false, window: window)
+            let target: ClickTarget = isWindowSnapHeld
+                ? .window(WindowSnap.target(at: point, in: windowTargets)) : .display
+            drag = .select(point, moved: false, target: target)
             draftSelection = CGRect(origin: point, size: .zero)
         }
         refresh()
@@ -389,15 +407,40 @@ private final class CaptureView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard drag != nil else { return }
         let point = mousePoint(event)
+        if event.clickCount == 2, let start = doubleClickStart,
+           hypot(point.x - start.x, point.y - start.y) <= 3 {
+            doubleClickStart = nil
+            if let target = lastWindowClick, target.frame.contains(point) {
+                drag = nil
+                draftSelection = nil
+                if windowCaptureTask != nil {
+                    copyWhenWindowReady = true
+                } else if windowImage != nil {
+                    export(.clipboard)
+                }
+                return
+            }
+            if tool == nil, textField == nil, selection?.contains(point) == true {
+                drag = nil
+                draftSelection = nil
+                export(.clipboard)
+                return
+            }
+        }
+        doubleClickStart = nil
+        guard drag != nil else { return }
         updateDrag(at: point)
-        if case .select(_, let moved, let window) = drag, let draftSelection {
+        if case .select(_, let moved, let target) = drag, let draftSelection {
             if !moved, selection == nil {
-                if let window, let captureWindow {
-                    selectWindow(window, using: captureWindow)
-                } else {
+                switch target {
+                case .display:
                     replaceSelection(with: bounds)
+                case .window(let window):
+                    if let window, let captureWindow {
+                        lastWindowClick = window
+                        selectWindow(window, using: captureWindow)
+                    }
                 }
             } else if draftSelection.width >= Selection.minimum && draftSelection.height >= Selection.minimum {
                 replaceSelection(with: draftSelection)
@@ -427,11 +470,18 @@ private final class CaptureView: NSView {
                 self.windowCaptureTask = nil
                 self.replaceSelection(with: frame,
                                       windowImage: CaptureImage(image: image, size: frame.size, origin: frame.origin))
+                if self.copyWhenWindowReady {
+                    self.copyWhenWindowReady = false
+                    self.export(.clipboard)
+                    return
+                }
                 self.refresh()
                 if let window = self.window { self.updatePointer(at: window.mouseLocationOutsideOfEventStream) }
             } catch {
                 guard !Task.isCancelled, let self else { return }
                 self.windowCaptureTask = nil
+                self.lastWindowClick = nil
+                self.copyWhenWindowReady = false
                 self.report(self.strings(.windowCaptureFailed))
                 self.refresh()
             }
@@ -446,11 +496,11 @@ private final class CaptureView: NSView {
 
     private func updateDrag(at point: CGPoint) {
         switch drag {
-        case .select(let start, let moved, let window):
+        case .select(let start, let moved, let target):
             let draft = Selection.between(start, point)
             draftSelection = draft
             if !moved, max(draft.width, draft.height) > 3 {
-                drag = .select(start, moved: true, window: window)
+                drag = .select(start, moved: true, target: target)
             }
         case .resize(let handle, let original, let start):
             let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
@@ -767,7 +817,6 @@ private final class CaptureView: NSView {
             if let tiff = NSBitmapImageRep(cgImage: image).tiffRepresentation {
                 item.setData(tiff, forType: .tiff)
             }
-            let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             guard pasteboard.writeObjects([item]) else {
                 report(strings(.clipboardError))

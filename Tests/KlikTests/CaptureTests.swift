@@ -55,6 +55,27 @@ final class CaptureTests: XCTestCase {
         XCTAssertEqual(try rgba(result, x: 6, y: 20), [0, 0, 0, 255])
     }
 
+    func testUnmarkedCropPreservesSourceColorSpace() throws {
+        let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let context = try XCTUnwrap(CGContext(data: nil, width: 32, height: 24,
+                                             bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(try XCTUnwrap(CGColor(colorSpace: colorSpace, components: [1, 0, 0, 1])))
+        context.fill(CGRect(x: 0, y: 0, width: 32, height: 24))
+        let source = try XCTUnwrap(context.makeImage())
+        let background = CaptureImage(image: source, size: CGSize(width: 16, height: 12))
+        let crop = try XCTUnwrap(background.render(
+            selection: CGRect(x: 2, y: 3, width: 10, height: 8), marks: []
+        ))
+        XCTAssertEqual(crop.width, 20)
+        XCTAssertEqual(crop.height, 16)
+        XCTAssertEqual(crop.colorSpace?.name, colorSpace.name)
+        let png = try XCTUnwrap(CaptureImage.png(crop))
+        let decoded = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let exported = try XCTUnwrap(CGImageSourceCreateImageAtIndex(decoded, 0, nil))
+        XCTAssertEqual(exported.colorSpace?.name, colorSpace.name)
+    }
+
     func testWindowExportUsesNativePixelsAndMarksAtItsPreviewPosition() throws {
         let source = try makeImage(width: 200, height: 140) { context in
             context.setFillColor(CGColor(red: 0, green: 1, blue: 0, alpha: 1))

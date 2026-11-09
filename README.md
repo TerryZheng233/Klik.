@@ -26,6 +26,8 @@ I wanted a small tool I could use without losing my place. Klik. stays in the ba
 | **Drag** | Frame part of the screen. Pull an edge or corner to adjust the selection |
 | **Click** | Select the whole display under your pointer |
 | **Hold Space and click** | Select a single window, including the parts another window covers |
+| **Double-click** | Copy the selection when no annotation tool is active. With no selection, copy the display |
+| **Hold Space and double-click a window** | Capture and copy the window |
 | **Enter** or **✓** | Copy the screenshot with your annotations |
 | **Save PNG button (↓)** | Save a PNG in Downloads |
 | **Esc** or **×** | Cancel the capture |
@@ -53,13 +55,13 @@ To have Klik. ready when you sign in, add it under **System Settings → General
 
 ## Install with an agent
 
-Attach `Klik-0.1.13-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) is private. If you can’t open it, ask the person who invited you to try Klik. for the DMG and its SHA‑256 file.
+Attach `Klik-0.1.14-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.14 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14) is private. If you can’t open it, ask the person who invited you to try Klik. for the DMG and its SHA‑256 file.
 
 ```text
-Help me install Klik. 0.1.13 on this Mac using the DMG I attached. If I haven’t attached it, use the v0.1.13 Release at https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13. If you can’t access it, ask me for the file.
+Help me install Klik. 0.1.14 on this Mac using the DMG I attached. If I haven’t attached it, use the v0.1.14 Release at https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14. If you can’t access it, ask me for the file.
 
 1. Check that my Mac has Apple silicon and runs macOS 14 or later. If the SHA-256 file is available, verify the DMG against it and stop if it doesn’t match.
-2. Mount the DMG, copy Klik.app to /Applications, check that the installed version is 0.1.13, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
+2. Mount the DMG, copy Klik.app to /Applications, check that the installed version is 0.1.14, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
 3. Guide me through the first launch. If macOS blocks this unnotarized build, show me the Apple instructions at https://support.apple.com/en-us/102445 and let me decide whether to open it. Leave system security settings as they are.
 4. Ask me to press Option+A and grant Screen & System Audio Recording access when prompted. If macOS asks for a restart, have me reopen Klik. and try Option+A again.
 ```
@@ -74,6 +76,8 @@ swift test
 open -g .build/Klik.app
 ```
 
+If iCloud Drive or another sync service adds Finder metadata that breaks signature verification, pass an unsynced output directory to `./build-app.sh`, such as `./build-app.sh "$(mktemp -d /tmp/klik-build.XXXXXX)"`.
+
 The GitHub DMG is ad hoc signed and hasn’t been notarized. macOS may block it on first launch or ask for screen recording access again after an update. For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Using the same identity for local updates helps retain the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
 To make a drag-to-install DMG, use [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/).
@@ -82,7 +86,7 @@ To make a drag-to-install DMG, use [dmgbuild](https://pypi.org/project/dmgbuild/
 KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
 dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
-  'Klik.' Klik-0.1.13-arm64.dmg
+  'Klik.' Klik-0.1.14-arm64.dmg
 ```
 
 Klik. uses toolbar icons from [Lucide](https://lucide.dev/icons/). The [license](Resources/Lucide/LICENSE) is included in the repository.

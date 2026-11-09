@@ -33,16 +33,26 @@ sign_options=(--force --sign "${identity:--}")
 if [[ "$local_signing" == true ]]; then sign_options+=(--timestamp=none); fi
 /usr/bin/codesign "${sign_options[@]}" "$app"
 /usr/bin/codesign --verify --strict "$app"
-if [[ -e "$destination/Klik.app" ]]; then
-    requirement="$(/usr/bin/codesign -d -r- "$destination/Klik.app" 2>&1 | /usr/bin/sed -n 's/^designated => //p')"
+installed_app="$destination/Klik.app"
+replace_existing=false
+if [[ -e "$installed_app" ]]; then
+    requirement="$(/usr/bin/codesign -d -r- "$installed_app" 2>&1 | /usr/bin/sed -n 's/^designated => //p')"
     if [[ -n "$requirement" ]] && ! /usr/bin/codesign --verify -R "=$requirement" "$app"; then
         printf '%s\n' 'The update has a different signing identity. Use the existing signing identity or build to a new destination.' >&2
         exit 1
     fi
-    # Ditto updates the bundle at its existing path.
-    /usr/bin/ditto "$app" "$destination/Klik.app"
-else
-    mv "$app" "$destination/Klik.app"
+    replace_existing=true
 fi
-/usr/bin/codesign --verify --strict "$destination/Klik.app"
-printf '%s\n' "$destination/Klik.app"
+
+# Swap the signed bundles on the same volume without merging files or changing metadata.
+swift - "$app" "$installed_app" "$replace_existing" <<'SWIFT'
+import Darwin
+
+let flags = CommandLine.arguments[3] == "true" ? RENAME_SWAP : RENAME_EXCL
+if renamex_np(CommandLine.arguments[1], CommandLine.arguments[2], UInt32(flags)) != 0 {
+    perror("Could not place Klik.app in the build destination")
+    exit(1)
+}
+SWIFT
+/usr/bin/codesign --verify --strict "$installed_app"
+printf '%s\n' "$installed_app"

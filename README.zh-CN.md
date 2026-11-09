@@ -26,6 +26,8 @@
 | **拖动** | 框选屏幕的一部分。想微调就拖边缘或四角 |
 | **单击** | 选中鼠标所在的整块显示器 |
 | **按住空格并单击** | 选中一个窗口，连被挡住的部分也能截到 |
+| **双击选区** | 未选中标注工具时，双击复制选区。没有选区时，双击复制整块显示器 |
+| **按住空格双击窗口** | 截取并复制这个窗口 |
 | **Enter** 或 **✓** | 把带标注的截图复制到剪贴板 |
 | **「下载 PNG」按钮（↓）** | 把 PNG 存到「下载」 |
 | **Esc** 或 **×** | 取消截图 |
@@ -53,13 +55,13 @@
 
 ## 让 Agent 帮忙安装
 
-把 `Klik-0.1.13-arm64.dmg` 发给能操作你这台 Mac 的 Agent，再贴上下面这段话。[v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) 是私有的。如果打不开，请邀请你试用的人把 DMG 和 SHA‑256 校验文件发给你。
+把 `Klik-0.1.14-arm64.dmg` 发给能操作你这台 Mac 的 Agent，再贴上下面这段话。[v0.1.14 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14) 是私有的。如果打不开，请邀请你试用的人把 DMG 和 SHA‑256 校验文件发给你。
 
 ```text
-请用我附上的 DMG 帮我在这台 Mac 上安装 Klik. 0.1.13。如果我还没附文件，请从 https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13 获取 v0.1.13 的安装包。打不开就请我提供文件。
+请用我附上的 DMG 帮我在这台 Mac 上安装 Klik. 0.1.14。如果我还没附文件，请从 https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14 获取 v0.1.14 的安装包。打不开就请我提供文件。
 
 1. 确认这台 Mac 使用 Apple 芯片，系统是 macOS 14 或更新版本。如果有 SHA-256 校验文件，请先核对 DMG，校验不符就停止。
-2. 打开 DMG，把 Klik.app 复制到「应用程序」，确认版本是 0.1.13，再推出安装盘。如果已经装过 Klik.，替换前先问我。
+2. 打开 DMG，把 Klik.app 复制到「应用程序」，确认版本是 0.1.14，再推出安装盘。如果已经装过 Klik.，替换前先问我。
 3. 指导我首次打开。如果 macOS 拦截这个未经公证的版本，请参考 https://support.apple.com/en-us/102445 告诉我怎么操作，由我决定是否打开。保留系统原有的安全设置。
 4. 请我按 Option+A，出现提示时由我授予「屏幕与系统音频录制」权限。如果系统要求重新打开应用，请提醒我重开后再按一次 Option+A。
 ```
@@ -74,6 +76,8 @@ swift test
 open -g .build/Klik.app
 ```
 
+如果 iCloud 云盘或其他同步服务添加的 Finder 元数据导致签名校验失败，可指定一个不同步的输出目录，例如运行 `./build-app.sh "$(mktemp -d /tmp/klik-build.XXXXXX)"`。
+
 GitHub 上的 DMG 使用临时签名，未经 Apple 公证。macOS 可能拦住首次打开，也可能在更新后再次询问屏幕录制权限。如果本机钥匙串只有一个 **Apple Development** 签名身份，构建脚本会用它签名。也可以通过 `KLIK_SIGN_IDENTITY` 自己指定。更新本机签名版时，沿用同一个身份有助于保留原来的授权。[Apple 代码签名要求](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
 用 [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/) 制作可拖拽安装的 DMG。
@@ -82,7 +86,7 @@ GitHub 上的 DMG 使用临时签名，未经 Apple 公证。macOS 可能拦住�
 KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
 dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
-  'Klik.' Klik-0.1.13-arm64.dmg
+  'Klik.' Klik-0.1.14-arm64.dmg
 ```
 
 工具栏图标来自 [Lucide](https://lucide.dev/icons/)，[许可文件](Resources/Lucide/LICENSE)随源码附上。
