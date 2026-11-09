@@ -10,7 +10,7 @@
   Apple silicon · macOS 14+
 </p>
 
-Whether you’re reading a paper, browsing a website, or playing a game, press **⌥A** when you see something you want to capture. Select it and hit **Enter**. Your screenshot is ready to paste, and you can carry on with what you were doing.
+Whether you’re reading a paper, browsing a website, or playing a game, press **⌥A** when you see something you want to capture. Select it, then hit **Enter** or simply double-click inside the selection. Your screenshot is ready to paste, and you can carry on with what you were doing.
 
 ## Why I made Klik.
 
