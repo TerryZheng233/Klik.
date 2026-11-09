@@ -9,13 +9,13 @@
   Apple silicon · macOS 14+
 </p>
 
-You’re reading a PDF and find a passage you want to share. Press **⌥A**, select it, and hit **Enter**. The screenshot is ready to paste, and you can carry on reading.
+When I find something I want to share while reading a PDF, I press **⌥A**, select it, and hit **Enter**. The screenshot is ready to paste, and I can carry on reading.
 
 ## Why I made Klik.
 
-I’ve always liked how easy it is to take a screenshot in WeChat. What bothered me was ending up back in WeChat after every capture, especially when I was in the middle of reading or playing a game. The built-in Mac shortcut usually left me with a file on my desktop, even when all I wanted was to paste the image into a chat.
+I like how easy it is to take a screenshot in WeChat. But after each capture, I find myself back in WeChat, even when I’m in the middle of reading or playing a game. Mac screenshots are saved to the desktop by default, so I kept collecting files when all I wanted was to paste an image into a chat.
 
-I wanted something I could reach for in the middle of whatever I was doing. Klik. stays in the background until I need it. I can draw a box or arrow, add a note, or pixelate a detail before copying the image. When I do want to keep a file, I can save a PNG to Downloads.
+I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. If I want a file, I can save a PNG to Downloads.
 
 ![A Wikipedia page about leap years with February 29 marked by a red box and arrow.](docs/klik-preview.png)
 
@@ -31,7 +31,7 @@ I wanted something I could reach for in the middle of whatever I was doing. Klik
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
 
-To capture a partly covered window, hold **Space** and point to any visible part of it. Click, and the full window appears in the selection.
+To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection.
 
 ![A browser window partly covered by Notes on the left. The full browser window appears in the capture editor on the right.](docs/klik-window.png)
 
@@ -74,9 +74,9 @@ swift test
 open -g .build/Klik.app
 ```
 
-The GitHub DMG is ad hoc signed and hasn’t been notarized. macOS may block it on first launch or ask for screen recording access again after an update. For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Use the same identity for local updates to keep the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+The GitHub DMG is ad hoc signed and hasn’t been notarized. macOS may block it on first launch or ask for screen recording access again after an update. For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Using the same identity for local updates helps retain the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
-[dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/) makes the drag-to-install DMG.
+To make a drag-to-install DMG, use [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/).
 
 ```sh
 KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
