@@ -9,7 +9,7 @@
   Apple silicon · macOS 14+
 </p>
 
-When I find something I want to share while reading a PDF, I press **⌥A**, select it, and hit **Enter**. The screenshot is ready to paste, and I can carry on reading.
+Whether I’m reading a paper, browsing a website, or playing a game, I can press **⌥A** when I see something I want to share. I select it, hit **Enter**, and the screenshot is ready to paste. Then I can carry on with what I was doing.
 
 ## Why I made Klik.
 
