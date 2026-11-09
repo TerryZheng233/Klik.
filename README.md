@@ -112,4 +112,6 @@ dmgbuild -s Packaging/dmg-settings.py \
   'Klik.' Klik-build-arm64.dmg
 ```
 
-Klik. uses toolbar icons from [Lucide](https://lucide.dev/icons/). The [license](Resources/Lucide/LICENSE) is included in the repository.
+## License
+
+Klik. is available under the [MIT License](LICENSE). Toolbar icons are from [Lucide](https://lucide.dev/icons/) and retain their [own license](Resources/Lucide/LICENSE).

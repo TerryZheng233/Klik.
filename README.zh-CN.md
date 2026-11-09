@@ -112,4 +112,6 @@ dmgbuild -s Packaging/dmg-settings.py \
   'Klik.' Klik-build-arm64.dmg
 ```
 
-工具栏图标来自 [Lucide](https://lucide.dev/icons/)，[许可文件](Resources/Lucide/LICENSE)随源码附上。
+## 许可证
+
+Klik. 使用 [MIT 许可证](LICENSE)。工具栏图标来自 [Lucide](https://lucide.dev/icons/)，并保留其[原有许可证](Resources/Lucide/LICENSE)。
