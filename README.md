@@ -1,43 +1,54 @@
 <p align="center">
-  <img src="docs/klik-icon.png" alt="Klik. app icon" width="92">
+  <img src="docs/klik-icon.png" alt="Klik. app icon" width="88">
 </p>
-
 <h1 align="center">Klik.</h1>
-<p align="center">原生 macOS 截图工具。按一下，框一块，直接粘贴。</p>
+<p align="center">A quiet, native screenshot tool for Mac. Capture a region, mark it up, and paste it.</p>
 <p align="center">
-  <a href="https://github.com/TerryZheng233/Klik/releases/latest">下载 DMG</a>
-  · Apple silicon · macOS 14+
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="https://github.com/TerryZheng233/Klik/releases/latest">Download DMG</a> ·
+  Apple silicon · macOS 14+
 </p>
 
-![在 Safari 中用 Klik. 框选维基百科闰年词条的一段说明，并圈出 2 月 29 日（合成演示）](docs/klik-preview.png)
+![Klik. selects part of a Wikipedia article in Safari and marks February 29. The page is a generated demo scene.](docs/klik-preview.png)
 
-Klik. 平时在后台等候。没有主窗口、菜单栏图标或 Dock 图标。按截图快捷键后，屏幕略暗，鼠标变成十字。拖出的选区恢复原亮度，边角可以继续调整。
+Klik. waits in the background. Press your shortcut to frame part of the screen, adjust the edges, and add a rectangle, arrow, pen stroke, text, or freehand pixelation. Press **Enter** to copy the marked-up image and get back to what you were doing.
 
-首次打开时，两步引导会介绍基本操作，并让你保留 **⌥A** 或录制自己的快捷键。以后可以通过重新打开 Klik. 修改快捷键。如果新组合被其他应用占用，Klik. 会提示换一组。
+## Get started
 
-| 操作 | 结果 |
+1. Download the [latest DMG](https://github.com/TerryZheng233/Klik/releases/latest), open it, and drag **Klik.app** into **Applications**.
+2. Open Klik. from Applications. Choose **下一步** (Next), then **使用 ⌥A** to keep the default or **自定义快捷键…** to record your own.
+3. Use the shortcut to start a capture. On the first capture, macOS asks for **Screen & System Audio Recording** access. Reopen Klik. if macOS asks you to.
+
+<p align="center">
+  <img src="docs/klik-install.png" alt="Klik. disk image with Klik.app on the left and the Applications shortcut on the right" width="560">
+</p>
+
+## Choose a shortcut that feels right
+
+Reopen Klik. from Applications whenever you want to change the shortcut. If a combination is in use, Klik. asks you to try another one and keeps your existing shortcut.
+
+![The two first-launch screens in Klik.: learn the basics, then keep Option+A or record a different shortcut. The app UI is shown in Simplified Chinese.](docs/klik-guide.png)
+
+*The setup figure shows the current Simplified Chinese app interface.*
+
+## While you capture
+
+| Control | What it does |
 | --- | --- |
-| **⌥A**（默认，可修改） | 截取鼠标所在的显示器并开始框选 |
-| **拖动边或角** | 调整选区大小，鼠标会提示调整方向 |
-| **Enter** 或 **✓** | 将带标注的截图复制到剪贴板 |
-| **↓** | 将 PNG 直接保存到「下载」 |
-| **⌘Z** / **Esc** | 撤销上一笔标注 / 取消截图 |
+| **⌥A** (default) | Start a region capture on the display under the pointer |
+| **Drag an edge or corner** | Adjust the selected region |
+| **Enter** or **green ✓** | Copy the finished image to the clipboard |
+| **↓** | Save a PNG to Downloads |
+| **Esc** or **red ×** | Cancel the capture |
+| **⌘Z** | Undo the last mark |
 
-工具栏提供矩形、箭头、画笔、文字和自由马赛克画刷。矩形、箭头、画笔和文字共用八种颜色。截图保留当前显示器的像素分辨率，每次框选限一块屏幕。
+The rectangle, arrow, pen, and text tools share eight colors. Captures use the display's pixel resolution and stay on one display. Klik. processes captures locally and has no Dock or menu bar icon while idle.
 
-## 安装
+To launch at sign-in, add Klik.app under **System Settings → General → Login Items → Open at Login**.
 
-1. 从 [GitHub Release](https://github.com/TerryZheng233/Klik/releases/latest) 下载 `Klik-0.1.6-arm64.dmg`。
-2. 打开磁盘映像，把 **Klik.** 拖到 **Applications**，然后从「应用程序」打开 Klik.。
-3. 按 **⌥A**，按系统提示开启「屏幕与系统音频录制」。如果系统要求重新打开应用，重开后再按一次 **⌥A**。
+## Build from source
 
-想在登录后自动启动，可在「系统设置 → 通用 → 登录项」把 Klik.app 加到「登录时打开」。如果 **⌥A** 被其他截图工具占用，先释放该组合键，再重新打开 Klik.。
-
-本 Release 是供私有仓库使用的测试构建，使用临时签名，未经 Apple 公证。在其他 Mac 上，系统可能限制从网络下载的构建直接启动。[Apple 公证说明](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
-
-## 从源码构建
-
-需要 macOS 15 或更新版本的 SDK，以及 Swift 5.10 或更新版本。
+Requires Swift 5.10 or later and the macOS 15 SDK or later.
 
 ```sh
 swift test
@@ -45,14 +56,14 @@ swift test
 open -g .build/Klik.app
 ```
 
-`./build-app.sh /path/to/output` 可指定输出目录。默认使用临时签名。如有 Apple Development 或 Developer ID 签名证书，可通过 `KLIK_SIGN_IDENTITY` 指定。重建后若系统仍显示已授权但无法截图，可移除旧授权条目，再为正在运行的 Klik.app 重新授权。
+The private release uses ad hoc signing and has not been notarized by Apple. macOS may block a downloaded copy on first launch. A new build may also require screen recording permission again. [Apple notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 
-如需生成同样布局的 DMG，可在构建应用后使用 [dmgbuild 1.6.7](https://pypi.org/project/dmgbuild/1.6.7/)：
+To make the same drag-to-install disk image after building the app, use [dmgbuild 1.6.7](https://pypi.org/project/dmgbuild/1.6.7/):
 
 ```sh
 dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/Klik.app -D background=Packaging/background.png \
-  'Klik.' Klik-0.1.6-arm64.dmg
+  'Klik.' Klik-0.1.7-arm64.dmg
 ```
 
-应用图标是 **k.** 字标。工具栏使用 [Lucide](https://lucide.dev/icons/)，许可见 [Resources/Lucide/LICENSE](Resources/Lucide/LICENSE)。
+Toolbar icons are from [Lucide](https://lucide.dev/icons/). See the [included license](Resources/Lucide/LICENSE).
