@@ -59,6 +59,7 @@ enum UIKey: String, CaseIterable {
     case practiceMosaic
     case practiceColor
     case practiceUndo
+    case practiceRedo
     case practiceDownload
     case practiceCancel
     case practiceConfirm
@@ -104,6 +105,7 @@ enum UIKey: String, CaseIterable {
     case toolText
     case toolMosaic
     case toolUndo
+    case toolRedo
     case toolDownload
     case toolCancel
     case toolConfirm

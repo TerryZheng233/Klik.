@@ -5,6 +5,7 @@
 <p align="center">Take a screenshot. Keep your train of thought.</p>
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
   <a href="https://github.com/TerryZheng233/Klik/releases/latest">Download DMG</a> ·
   Apple silicon · macOS 14+
 </p>
@@ -31,8 +32,9 @@ I wanted a small tool I could use without losing my place. Klik. stays in the ba
 | **Save PNG button (↓)** | Save a PNG in Downloads |
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
+| **⇧⌘Z** | Redo an annotation you just undid |
 
-To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection. A magnifier appears while you drag or adjust a selection, helping you line up its edges. If you have multiple displays, move the pointer to the display you want to capture.
+To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection. A magnifier appears while you drag or adjust a selection, helping you line up its edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 

@@ -231,6 +231,45 @@ final class CapturePanelTests: XCTestCase {
         XCTAssertFalse(toolbar.isHidden)
     }
 
+    @MainActor
+    func testUndoRedoAndNewMarkClearRedoHistory() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        func button(_ key: UIKey) throws -> NSButton {
+            try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(key) })
+        }
+        let undo = try button(.toolUndo)
+        let redo = try button(.toolRedo)
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+        try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
+        try button(.toolRectangle).performClick(nil)
+        try drag(CGPoint(x: 180, y: 320), CGPoint(x: 260, y: 240))
+        XCTAssertTrue(undo.isEnabled)
+        XCTAssertFalse(redo.isEnabled)
+        undo.performClick(nil)
+        XCTAssertFalse(undo.isEnabled)
+        XCTAssertTrue(redo.isEnabled)
+        let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: [.command, .shift], timestamp: 0, windowNumber: panel.windowNumber,
+            context: nil, characters: "Z", charactersIgnoringModifiers: "Z", isARepeat: false,
+            keyCode: UInt16(kVK_ANSI_Z)))
+        panel.sendEvent(key)
+        XCTAssertTrue(undo.isEnabled)
+        XCTAssertFalse(redo.isEnabled)
+        undo.performClick(nil)
+        try drag(CGPoint(x: 300, y: 320), CGPoint(x: 380, y: 240))
+        XCTAssertFalse(redo.isEnabled)
+    }
+
     private func space(_ type: NSEvent.EventType) throws -> NSEvent {
         try XCTUnwrap(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: 0,
                                       windowNumber: 0, context: nil, characters: " ",

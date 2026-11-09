@@ -74,9 +74,9 @@ final class CapturePanel: NSPanel {
                 if !event.isARepeat { canvas.setWindowSnapHeld(true, at: mouseLocationOutsideOfEventStream) }
                 return
             }
-            if !canvas.isEditingText, modifiers == .command, event.charactersIgnoringModifiers == "z" {
-                canvas.undo()
-                return
+            if !canvas.isEditingText, key == kVK_ANSI_Z {
+                if modifiers == .command { canvas.undo(); return }
+                if modifiers == [.command, .shift] { canvas.redo(); return }
             }
         }
         if event.type == .cursorUpdate, isVisible {
@@ -178,7 +178,7 @@ private final class CaptureView: NSView {
     }
 
     private enum Pointer: Equatable {
-        case crosshair, arrow, hand, text
+        case crosshair, arrow, hand, openHand, closedHand, text
         case resize(Selection.Handle)
 
         var cursor: NSCursor {
@@ -186,6 +186,8 @@ private final class CaptureView: NSView {
             case .crosshair: return .crosshair
             case .arrow: return .arrow
             case .hand: return .pointingHand
+            case .openHand: return .openHand
+            case .closedHand: return .closedHand
             case .text: return .iBeam
             case .resize(let handle): return handle.cursor
             }
@@ -219,6 +221,7 @@ private final class CaptureView: NSView {
     private let pointerView = PointerView()
     private let magnifier = CaptureMagnifier()
     private let undoButton = NSButton()
+    private let redoButton = NSButton()
     private let inkButton = NSButton()
     private let toolbarDividers = [NSView(), NSView()]
     private var toolbarButtons: [NSButton] = []
@@ -229,6 +232,7 @@ private final class CaptureView: NSView {
     private(set) var isWindowSnapHeld = false
     private var hoveredWindow: CGRect?
     private var marks: [Mark] = []
+    private var undoneMarks: [Mark] = []
     private var preview: Mark?
     private var drag: Drag?
     private var strokePoints: [CGPoint] = []
@@ -352,10 +356,14 @@ private final class CaptureView: NSView {
             next = .arrow
         } else if case .resize(let handle, _, _) = drag {
             next = .resize(handle)
+        } else if case .move = drag {
+            next = .closedHand
         } else if drag == nil, let selection, let handle = Selection.Handle.hit(
             at: point, in: selection, retaining: pointer?.resizeHandle
         ) {
             next = .resize(handle)
+        } else if drag == nil, tool == nil, let selection, selection.contains(point) {
+            next = .openHand
         } else {
             next = .crosshair
         }
@@ -512,7 +520,7 @@ private final class CaptureView: NSView {
                 replaceSelection(with: draftSelection)
             }
         }
-        if let preview { marks.append(preview) }
+        if let preview { addMark(preview) }
         self.drag = nil
         draftSelection = nil
         preview = nil
@@ -524,6 +532,7 @@ private final class CaptureView: NSView {
         self.windowImage = windowImage
         selection = rect
         marks.removeAll()
+        undoneMarks.removeAll()
         choose(nil)
     }
 
@@ -627,6 +636,9 @@ private final class CaptureView: NSView {
         configure(undoButton, ("undo", .toolUndo), action: #selector(undo))
         toolbarButtons.append(undoButton)
         practiceSteps.append(.init(button: undoButton, detail: .practiceUndo))
+        configure(redoButton, ("redo", .toolRedo), action: #selector(redo))
+        toolbarButtons.append(redoButton)
+        practiceSteps.append(.init(button: redoButton, detail: .practiceRedo))
         let actions: [(String, UIKey, UIKey, Selector)] = [
             ("download", .toolDownload, .practiceDownload, #selector(download)),
             ("x", .toolCancel, .practiceCancel, #selector(cancel)),
@@ -806,6 +818,7 @@ private final class CaptureView: NSView {
             palette.isHidden = true
         }
         undoButton.isEnabled = !marks.isEmpty || isEditingText
+        redoButton.isEnabled = !undoneMarks.isEmpty && !isEditingText
         if let coach {
             if drag != nil || isEditingText || windowCaptureTask != nil || !errorLabel.isHidden {
                 coach.hide()
@@ -868,15 +881,26 @@ private final class CaptureView: NSView {
         window?.makeFirstResponder(self)
         let value = field.stringValue
         if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            marks.append(.text(value, textOrigin, ink))
+            addMark(.text(value, textOrigin, ink))
         }
         textField = nil
         field.removeFromSuperview()
     }
 
+    private func addMark(_ mark: Mark) {
+        marks.append(mark)
+        undoneMarks.removeAll()
+    }
+
     @objc func undo() {
         commitText()
-        if !marks.isEmpty { marks.removeLast() }
+        if let mark = marks.popLast() { undoneMarks.append(mark) }
+        refresh()
+    }
+
+    @objc func redo() {
+        guard !isEditingText else { return }
+        if let mark = undoneMarks.popLast() { marks.append(mark) }
         refresh()
     }
 

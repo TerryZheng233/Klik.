@@ -44,6 +44,7 @@
 "toolText" = "文字";
 "toolMosaic" = "马赛克画刷";
 "toolUndo" = "撤销（⌘Z）";
+"toolRedo" = "重做（⇧⌘Z）";
 "toolDownload" = "下载 PNG";
 "toolCancel" = "取消（Esc）";
 "toolConfirm" = "复制并完成（Enter）";
@@ -77,6 +78,7 @@
 "practiceMosaic" = "在要遮挡的地方涂抹，给内容打上马赛克。";
 "practiceColor" = "为矩形、箭头、画笔或文字选择颜色。";
 "practiceUndo" = "撤销上一笔标注。也可以按 ⌘Z。";
+"practiceRedo" = "恢复上一笔撤销的标注。也可以按 ⇧⌘Z。";
 "practiceDownload" = "将 PNG 保存到「下载」并结束截图。";
 "practiceCancel" = "取消这次截图并回到引导。按 Esc 效果相同。";
 "practiceConfirm" = "复制到剪贴板并完成截图。按 Enter 效果相同。";

@@ -44,6 +44,7 @@
 "toolText" = "Text";
 "toolMosaic" = "Mosaic Brush";
 "toolUndo" = "Undo (⌘Z)";
+"toolRedo" = "Redo (⇧⌘Z)";
 "toolDownload" = "Save PNG to Downloads";
 "toolCancel" = "Cancel (Esc)";
 "toolConfirm" = "Copy and Finish (Enter)";
@@ -77,6 +78,7 @@
 "practiceMosaic" = "Brush over a detail to pixelate it.";
 "practiceColor" = "Pick a color for rectangles, arrows, pen strokes, or text.";
 "practiceUndo" = "Remove the last mark. You can also press ⌘Z.";
+"practiceRedo" = "Bring back the last mark you removed. You can also press ⇧⌘Z.";
 "practiceDownload" = "Save a PNG to Downloads and finish the capture.";
 "practiceCancel" = "Discard this capture and return to the guide. Esc does the same.";
 "practiceConfirm" = "Copy to the clipboard and finish. Enter does the same.";
