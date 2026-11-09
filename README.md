@@ -20,7 +20,7 @@ I like how easy it is to take a screenshot in WeChat. But by default, confirming
 
 I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. Drag boxes, arrows, text, and pen marks to reposition them. Adjust a box using its handles, or drag an arrow’s endpoints to change its length and direction. When adding text, press Enter once to finish editing and again to copy. If I want a file, I can save a PNG to Downloads.
 
-![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-preview.png)
+![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
 A dinner plan to send to a friend: highlight the time, cover the contact details, and copy. This illustration uses fictional booking details.
 
