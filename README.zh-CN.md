@@ -2,65 +2,48 @@
   <img src="docs/klik-icon.png" alt="Klik. 应用图标" width="88">
 </p>
 <h1 align="center">Klik.</h1>
-<p align="center">原生 macOS 截图工具。按一下，框一块，标好就能粘贴。</p>
+<p align="center">Mac 原生截图工具。选中画面，加上标注，按 Enter 就能复制。</p>
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="https://github.com/TerryZheng233/Klik/releases/latest">下载 DMG</a> ·
   Apple 芯片 · macOS 14+
 </p>
 
-![在 Safari 中用 Klik. 框选维基百科闰年词条的一段说明，并圈出 2 月 29 日。网页为合成演示。](docs/klik-preview.png)
+![Klik. 框选维基百科的闰年词条，用红框和箭头标出 2 月 29 日。](docs/klik-preview.png)
 
-Klik. 平时在后台等候。按截图快捷键后拖动框选，边角可继续微调。你可以画矩形、箭头或自由笔迹，也可以加文字、涂马赛克。按 **Enter** 把标注后的截图复制到剪贴板，就能回到原来的应用直接粘贴。
+按 **⌥A** 开始截图，按 **Enter** 复制。可以先画矩形、箭头或自由笔迹，也可以添加文字或涂马赛克。Klik. 平时在后台运行，Dock 和菜单栏里都没有图标。
 
-## 安装和开始使用
+## 截区域、整屏或单个窗口
 
-1. 下载[最新 DMG](https://github.com/TerryZheng233/Klik/releases/latest)，打开后把 **Klik.app** 拖到 **Applications（应用程序）**。
-2. 从「应用程序」打开 Klik.。两步引导会介绍基本操作，并让你保留 **⌥A** 或录制自己的快捷键。
-3. 按截图快捷键。首次截图时，按 macOS 提示授予「屏幕与系统音频录制」权限。如果系统要求重开应用，照做后再试一次。
+| 截图时的操作 | 结果 |
+| --- | --- |
+| **拖动** | 框选一块区域。拖动边缘或角可微调 |
+| **单击** | 选中鼠标所在的整块显示器 |
+| **按住空格并单击** | 高亮并单独截取一个窗口，包括被其他窗口挡住的内容 |
+| **Enter** 或 **✓** | 将标注后的图片复制到剪贴板 |
+| **↓** | 把 PNG 保存到「下载」 |
+| **Esc** 或 **×** | 取消截图 |
+| **⌘Z** | 撤销上一笔标注 |
+
+想截被遮挡的窗口时，按住**空格**，把鼠标移到它露出来的任意一部分。单击后，选区里会显示完整窗口，接着就能标注或复制。下图使用浏览器和备忘录示例演示。
+
+![窗口截取前后对比。左图的备忘录盖住了浏览器，右图选中浏览器后显示完整网页。](docs/klik-window.png)
+
+## 安装与第一次截图
+
+1. 下载[最新 DMG](https://github.com/TerryZheng233/Klik/releases/latest)，打开后把 **Klik.app** 拖到「应用程序」。
+2. 打开 Klik. 并按 **⌥A**。按 macOS 提示授予「屏幕与系统音频录制」权限。如果系统要求重新打开，照做后再试。
+3. 实际截一张图。引导会在工具栏旁解释各个按钮，截图完成后才问你要保留快捷键还是换一组。
 
 <p align="center">
-  <img src="docs/klik-install.png" alt="Klik. 安装盘：将左侧的 Klik.app 拖到右侧的 Applications 快捷方式" width="560">
+  <img src="docs/klik-install.png" alt="Klik. 安装盘，将左侧的 Klik.app 拖到右侧的 Applications 快捷方式" width="520">
 </p>
 
-## 选一组顺手的快捷键
-
-以后想改键，从「应用程序」重新打开 Klik. 即可。如果新组合键被占用，Klik. 会提示换一组，并保留当前生效的快捷键。
-
-![Klik. 的两步新手引导：先了解基本操作，再保留 Option+A 或录制自定义快捷键。](docs/klik-guide.png)
-
-*上图为 0.1.7 的简体中文引导。*
-
-## 语言和外观
-
-从 0.1.8 起，Klik. 默认跟随系统语言。重新打开 Klik.，在「语言」里可即时切换「跟随系统」「English」或「简体中文」。引导和设置会随 macOS 切换浅色或深色外观。
+从「应用程序」重新打开 Klik.，可以修改快捷键，在「语言」里选择「跟随系统」「English」或「简体中文」，也可以点「练习截图…」再走一遍引导。引导和设置随 macOS 切换浅色或深色外观。
 
 ![浅色外观的英文快速入门和深色外观的简体中文设置。](docs/klik-interface.png)
 
-## 练习截第一张图
-
-从 0.1.9 起，新手引导会先请你按 **⌥A**。如果 macOS 询问屏幕录制权限，授权后回到引导。拖出选区后，工具栏会逐个高亮按钮并解释用法，也可以边看边试。
-
-![截图工具栏用绿框高亮矩形按钮，下方的提示卡说明如何使用。](docs/klik-practice.png)
-
-按 **Enter** 复制，或点 **↓** 保存 PNG。截图完成后，Klik. 才会问你要保留快捷键还是换一组。按 **Esc** 会回到练习入口。以后也能重新打开 Klik.，在设置里点「练习截图…」再走一遍。
-
-## 截图时可以做什么
-
-| 操作 | 结果 |
-| --- | --- |
-| **⌥A**（默认） | 在鼠标所在的显示器上开始框选 |
-| **单击**（0.1.13 起） | 还没有选区时，选中整块显示器 |
-| **按住空格并单击**（0.1.13 起） | 单独截取鼠标下方的窗口，也能截到被其他窗口挡住的内容 |
-| **拖动选区边缘或角** | 调整选区大小 |
-| **Enter** 或**绿勾 ✓** | 将标注后的图片复制到剪贴板 |
-| **↓** | 把 PNG 保存到「下载」 |
-| **Esc** 或**红叉 ×** | 取消这次截图 |
-| **⌘Z** | 撤销上一笔标注 |
-
-矩形、箭头、画笔和文字共用八种颜色。截图在本机处理，保留该显示器的像素分辨率，每次框选限一块屏幕。后台运行时没有 Dock 或菜单栏图标。
-
-想要登录后自动运行，可在「系统设置 → 通用 → 登录项 → 登录时打开」添加 Klik.app。
+想让 Klik. 登录后自动运行，可以在「系统设置 → 通用 → 登录项 → 登录时打开」添加它。
 
 ## 从源码构建
 
@@ -72,16 +55,15 @@ swift test
 open -g .build/Klik.app
 ```
 
-私有仓库的 Release 使用临时签名，未经 Apple 公证。macOS 可能限制下载后的首次打开，换了构建版本后也可能需要重新授权屏幕录制。[Apple 公证说明](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+GitHub 的 DMG 使用临时签名，未经 Apple 公证。macOS 可能限制下载后的首次打开，也可能在更新后重新询问屏幕录制权限。本机钥匙串只有一个 **Apple Development** 签名身份时，构建脚本会使用它。也可以用 `KLIK_SIGN_IDENTITY` 指定身份。更新本机签名版时，沿用同一个身份即可保留授权。[Apple 代码签名要求](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
-本机更新时，如果钥匙串中只有一个 **Apple Development** 签名身份，构建脚本会使用它。也可以用 `KLIK_SIGN_IDENTITY` 指定证书。更新时沿用同一个签名身份，macOS 才能识别出是同一个应用并保留授权。
-
-构建应用后，可用 [dmgbuild 1.6.7](https://pypi.org/project/dmgbuild/1.6.7/) 生成相同布局的 DMG：
+使用 [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/) 生成拖拽安装的 DMG：
 
 ```sh
+KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
 dmgbuild -s Packaging/dmg-settings.py \
-  -D app=.build/Klik.app -D background=Packaging/background.png \
-  'Klik.' Klik-0.1.7-arm64.dmg
+  -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
+  'Klik.' Klik-0.1.13-arm64.dmg
 ```
 
 工具栏使用 [Lucide 图标](https://lucide.dev/icons/)。[查看随附的许可](Resources/Lucide/LICENSE)。
