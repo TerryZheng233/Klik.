@@ -45,6 +45,19 @@
 
 想让 Klik. 登录后自动运行，可以在「系统设置 → 通用 → 登录项 → 登录时打开」添加它。
 
+## 让你的 Agent 帮你装
+
+把 `Klik-0.1.13-arm64.dmg` 附给能操作你这台 Mac 的 Agent，再复制下面的提示词。[v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) 是私有的。如果打不开链接，可以请邀请你试用的人直接发 DMG 和 SHA‑256 校验文件。
+
+```text
+请用我附上的 DMG 帮我在这台 Mac 上安装 Klik. 0.1.13。如果我还没附文件，请从 https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13 获取 v0.1.13 的安装包。打不开就请我提供文件。
+
+1. 确认这台 Mac 使用 Apple 芯片，系统是 macOS 14 或更新版本。如果有 SHA-256 校验文件，请先核对 DMG，校验不符就停止。
+2. 打开 DMG，把 Klik.app 复制到「应用程序」，确认版本是 0.1.13，再推出安装盘。如果已经装过 Klik.，替换前先问我。
+3. 指导我首次打开。如果 macOS 拦截这个未经公证的版本，请参考 https://support.apple.com/en-us/102445 告诉我怎么操作，由我决定是否打开。保留系统原有的安全设置。
+4. 请我按 Option+A，出现提示时由我授予「屏幕与系统音频录制」权限。如果系统要求重新打开应用，请提醒我重开后再按一次 Option+A。
+```
+
 ## 从源码构建
 
 需要 Swift 5.10 或更新版本，以及 macOS 15 或更新版本的 SDK。

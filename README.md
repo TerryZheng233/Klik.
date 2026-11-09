@@ -45,6 +45,19 @@ Reopen Klik. from Applications to change the shortcut or choose **Follow System*
 
 To start Klik. at sign-in, add it under **System Settings → General → Login Items → Open at Login**.
 
+## Let your agent install Klik.
+
+Attach `Klik-0.1.13-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) is private. If you lack access, ask the person who invited you to try Klik. to send you the DMG and its SHA‑256 file.
+
+```text
+Help me install Klik. 0.1.13 on this Mac using the DMG I attached. If I haven’t attached it, use the v0.1.13 Release at https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13. If you can’t access it, ask me for the file.
+
+1. Check that my Mac has Apple silicon and runs macOS 14 or later. If the SHA-256 file is available, verify the DMG against it and stop if it doesn’t match.
+2. Mount the DMG, copy Klik.app to /Applications, check that the installed version is 0.1.13, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
+3. Guide me through the first launch. If macOS blocks this unnotarized build, show me the Apple instructions at https://support.apple.com/en-us/102445 and let me decide whether to open it. Leave system security settings as they are.
+4. Ask me to press Option+A and grant Screen & System Audio Recording access when prompted. If macOS asks for a restart, have me reopen Klik. and try Option+A again.
+```
+
 ## Build from source
 
 Requires Swift 5.10 or later and the macOS 15 SDK or later.
