@@ -106,3 +106,14 @@
 "historyYesterday" = "Yesterday";
 "historyPreview" = "Preview";
 "historyCopy" = "Copy";
+
+"appVersion" = "Version";
+"checkForUpdates" = "Check for Updates…";
+"checkingUpdates" = "Checking…";
+"updateAvailableTitle" = "An update is available";
+"updateAvailableBody" = "Klik. %@ is available. Open the release page to download it.";
+"updateCurrentTitle" = "You’re up to date";
+"updateCurrentBody" = "You have the latest available version of Klik.";
+"updateErrorTitle" = "Couldn’t check for updates";
+"updateErrorBody" = "Check your internet connection and try again. The release page may require access while the repository is private.";
+"openReleases" = "Open Release Page";

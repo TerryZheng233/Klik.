@@ -141,6 +141,16 @@ enum UIKey: String, CaseIterable {
     case historyLimit
     case historyLimitCount
     case historyStorageNote
+    case appVersion
+    case checkForUpdates
+    case checkingUpdates
+    case updateAvailableTitle
+    case updateAvailableBody
+    case updateCurrentTitle
+    case updateCurrentBody
+    case updateErrorTitle
+    case updateErrorBody
+    case openReleases
 }
 
 protocol KlikLocalizedError: Error {

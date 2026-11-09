@@ -106,3 +106,14 @@
 "historyYesterday" = "昨天";
 "historyPreview" = "预览";
 "historyCopy" = "复制";
+
+"appVersion" = "版本";
+"checkForUpdates" = "检查更新…";
+"checkingUpdates" = "正在检查…";
+"updateAvailableTitle" = "有新版本可用";
+"updateAvailableBody" = "Klik. %@ 已发布，可以打开发布页面下载。";
+"updateCurrentTitle" = "已经是最新版本";
+"updateCurrentBody" = "你安装的 Klik. 已是当前可用的最新版本。";
+"updateErrorTitle" = "无法检查更新";
+"updateErrorBody" = "请检查网络后重试。仓库为私有状态时，访问发布页面可能需要权限。";
+"openReleases" = "打开发布页面";

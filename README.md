@@ -52,7 +52,7 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 
 Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can change the limit to 5, 10, 20, or 50 screenshots. When the limit is reached, the oldest captures are removed.
 
-Settings also lets you turn on opening Klik. at login.
+Settings also lets you turn on opening Klik. at login and check for updates.
 
 If **⌥A** is already in use, for example by WeChat, you can choose another shortcut during setup or in settings. The two apps may not be able to use the same shortcut at the same time.
 

@@ -19,6 +19,10 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private var language: LanguagePreference
     private var strings: AppStrings
     private var historyLimit: Int
+    private var isCheckingUpdates = false
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+    }
 
     init(shortcut: CaptureShortcut, firstRun: Bool, issue: Error?,
          language: LanguagePreference, changeLanguage: @escaping (LanguagePreference) -> Void,
@@ -70,7 +74,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         present()
     }
 
-    @objc private func toggleLogin(_ sender: NSSwitch) {
+    @objc private func toggleLogin(_ sender: ForestSwitch) {
         do {
             if sender.state == .on {
                 try SMAppService.mainApp.register()
@@ -99,6 +103,43 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             issue = HistorySettingError()
         }
         render()
+    }
+
+    @objc private func checkForUpdates() {
+        guard !isCheckingUpdates else { return }
+        isCheckingUpdates = true
+        render()
+        let version = appVersion
+        Task { @MainActor [weak self] in
+            let result = await UpdateChecker.check(currentVersion: version)
+            guard let self else { return }
+            self.isCheckingUpdates = false
+            guard let window = self.window, window.isVisible else { return }
+            self.render()
+            let alert = NSAlert()
+            switch result {
+            case .upToDate:
+                alert.messageText = self.strings(.updateCurrentTitle)
+                alert.informativeText = self.strings(.updateCurrentBody)
+                alert.addButton(withTitle: self.strings(.ok))
+            case .available(let version):
+                alert.messageText = self.strings(.updateAvailableTitle)
+                alert.informativeText = self.strings(.updateAvailableBody, version)
+                alert.addButton(withTitle: self.strings(.openReleases))
+                alert.addButton(withTitle: self.strings(.cancel))
+            case .unavailable:
+                alert.messageText = self.strings(.updateErrorTitle)
+                alert.informativeText = self.strings(.updateErrorBody)
+                alert.addButton(withTitle: self.strings(.ok))
+                alert.addButton(withTitle: self.strings(.openReleases))
+            }
+            alert.beginSheetModal(for: window) { response in
+                if (result == .unavailable && response == .alertSecondButtonReturn)
+                    || (result != .unavailable && result != .upToDate && response == .alertFirstButtonReturn) {
+                    NSWorkspace.shared.open(UpdateChecker.releasePage)
+                }
+            }
+        }
     }
 
     // An already registered shortcut arrives through Carbon.
@@ -310,7 +351,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let loginSpacer = NSView()
             loginSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             loginRow.addArrangedSubview(loginSpacer)
-            let login = NSSwitch()
+            let login = ForestSwitch()
             login.target = self
             login.action = #selector(toggleLogin(_:))
             login.setAccessibilityLabel(strings(.loginAtStartup))
@@ -335,12 +376,13 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let historySpacer = NSView()
             historySpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             historyRow.addArrangedSubview(historySpacer)
-            let picker = NSPopUpButton()
+            let picker = ForestPicker(frame: .zero, pullsDown: false)
             picker.addItems(withTitles: KlikPreferences.historyLimits.map { strings(.historyLimitCount, $0) })
             picker.selectItem(at: KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 1)
             picker.target = self
             picker.action = #selector(chooseHistoryLimit(_:))
             picker.setAccessibilityLabel(strings(.historyLimit))
+            picker.bezelColor = KlikTheme.keycap
             picker.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
             historyRow.addArrangedSubview(picker)
             settingsRows.addArrangedSubview(historyRow)
@@ -386,6 +428,22 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             keyContent.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
             card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: settingsRows)
         }
+        if !reviewing {
+            let versionRow = stack(.horizontal, spacing: 10)
+            let versionWords = stack(.vertical, spacing: 5)
+            versionWords.addArrangedSubview(label(strings(.appVersion), weight: .semibold))
+            versionWords.addArrangedSubview(label(appVersion, size: 13, color: .secondaryLabelColor))
+            versionRow.addArrangedSubview(versionWords)
+            let spacer = NSView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            versionRow.addArrangedSubview(spacer)
+            let update = button(strings(isCheckingUpdates ? .checkingUpdates : .checkForUpdates), #selector(checkForUpdates))
+            update.isEnabled = !isCheckingUpdates
+            update.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            versionRow.addArrangedSubview(update)
+            settingsRows.addArrangedSubview(versionRow)
+            versionRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+        }
         content.addArrangedSubview(card)
         card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         if let issue {
@@ -414,13 +472,14 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     private func languagePicker() -> NSPopUpButton {
-        let picker = NSPopUpButton(frame: .zero, pullsDown: false)
+        let picker = ForestPicker(frame: .zero, pullsDown: false)
         let choices = LanguagePreference.allCases
         picker.addItems(withTitles: choices.map { $0.title(using: strings) })
         picker.selectItem(at: choices.firstIndex(of: language) ?? 0)
         picker.target = self
         picker.action = #selector(chooseLanguage(_:))
         picker.setAccessibilityLabel(strings(.language))
+        picker.bezelColor = KlikTheme.keycap
         return picker
     }
 
@@ -445,11 +504,47 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private func button(_ title: String, _ action: Selector, primary: Bool = false) -> NSButton {
         let button = NSButton(title: title, target: self, action: action)
         button.bezelStyle = .rounded
+        button.bezelColor = KlikTheme.keycap
         if primary {
             button.bezelColor = KlikTheme.primary
             button.keyEquivalent = "\r"
         }
         return button
+    }
+}
+
+// A native button-backed toggle gives the login setting a consistent accent,
+// while retaining keyboard and accessibility activation.
+private final class ForestSwitch: NSButton {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        title = ""
+        setButtonType(.pushOnPushOff)
+        isBordered = false
+        focusRingType = .none
+        setAccessibilityRole(.checkBox)
+        setAccessibilitySubrole(NSAccessibility.Subrole(rawValue: "AXSwitch"))
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override var intrinsicContentSize: NSSize { NSSize(width: 40, height: 24) }
+    override var state: NSControl.StateValue {
+        didSet { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let track = CGRect(x: 0, y: 2, width: 40, height: 20)
+        let trackPath = NSBezierPath(roundedRect: track, xRadius: 10, yRadius: 10)
+        (state == .on ? KlikTheme.primary : NSColor.secondaryLabelColor.withAlphaComponent(0.34)).setFill()
+        trackPath.fill()
+        let knob = CGRect(x: state == .on ? 21 : 3, y: 4, width: 16, height: 16)
+        NSColor.white.setFill()
+        NSBezierPath(ovalIn: knob).fill()
+        if window?.firstResponder === self {
+            KlikTheme.selection.setStroke()
+            trackPath.lineWidth = 2
+            trackPath.stroke()
+        }
     }
 }
 
