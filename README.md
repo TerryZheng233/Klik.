@@ -2,16 +2,24 @@
   <img src="docs/klik-icon.png" alt="Klik. app icon" width="88">
 </p>
 <h1 align="center">Klik.</h1>
-<p align="center">A native Mac screenshot tool for quick captures and annotations.</p>
+<p align="center">A lightweight Mac screenshot tool that copies to the clipboard and brings you back to your app.</p>
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="https://github.com/TerryZheng233/Klik/releases/latest">Download DMG</a> ·
   Apple silicon · macOS 14+
 </p>
 
-![Klik. frames a Wikipedia article and marks February 29 with a red rectangle and arrow.](docs/klik-preview.png)
+While reading a PDF in full-screen Preview, press **⌥A**, drag over the part you want to share, and press **Enter** to copy it. Klik. returns keyboard focus to Preview, so you can press **→** and turn the page straight away.
 
-Press **⌥A**, capture what you need, and press **Enter** to copy it. Add rectangles, arrows, pen strokes, text, or freehand pixelation before you paste. Klik. runs in the background without a Dock or menu bar icon.
+## Why I built Klik.
+
+When I use WeChat’s screenshot tool, confirming a capture takes me back to WeChat. That breaks the flow when I’m reading or playing a game in full screen. With the default Mac screenshot shortcut, a quick image I only meant to share leaves another file on my desktop. I wanted a small tool I could call up for a moment and then get back to what I was doing.
+
+- **Copy and paste to share.** The clipboard is the default. Click the save button when you want a PNG in Downloads.
+- **Mark up right in the selection.** Draw rectangles or arrows, sketch with the pen, add text, or brush over details to pixelate them.
+- **Call it up with a shortcut.** Klik. runs in the background. Keep **⌥A** or record a shortcut that feels natural to you.
+
+![Klik. frames a Wikipedia article and marks February 29 with a red rectangle and arrow.](docs/klik-preview.png)
 
 ## Capture a region, a display, or a window
 

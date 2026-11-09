@@ -2,16 +2,24 @@
   <img src="docs/klik-icon.png" alt="Klik. 应用图标" width="88">
 </p>
 <h1 align="center">Klik.</h1>
-<p align="center">Mac 原生截图工具。选中画面，加上标注，按 Enter 就能复制。</p>
+<p align="center">轻量 Mac 截图工具。截完复制，接着用刚才的 App。</p>
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="https://github.com/TerryZheng233/Klik/releases/latest">下载 DMG</a> ·
   Apple 芯片 · macOS 14+
 </p>
 
-![Klik. 框选维基百科的闰年词条，用红框和箭头标出 2 月 29 日。](docs/klik-preview.png)
+在「预览」里全屏读 PDF 时，按 **⌥A** 框住想分享的一段，再按 **Enter** 复制。Klik. 会把键盘焦点交回「预览」，接着按 **→** 就能继续翻页。
 
-按 **⌥A** 开始截图，按 **Enter** 复制。可以先画矩形、箭头或自由笔迹，也可以添加文字或涂马赛克。Klik. 平时在后台运行，Dock 和菜单栏里都没有图标。
+## 为什么做 Klik.
+
+我用微信截图时，确认后会跳回微信。全屏读文档或玩游戏时，这一下就会打断手头的事。用 Mac 默认的截图快捷键随手分享几张，桌面上又多了几个文件。我想要一个随时叫得出来、用完就收起来的截图工具。
+
+- **截完就能粘贴分享。** 默认复制到剪贴板。想留文件时，再点下载，把 PNG 存到「下载」。
+- **标注就在选区旁边。** 矩形、箭头、画笔、文字和马赛克，常用的几样随手就能用。
+- **平时在后台。** 要截图时按 **⌥A**，也可以换成自己顺手的快捷键。
+
+![Klik. 框选维基百科的闰年词条，用红框和箭头标出 2 月 29 日。](docs/klik-preview.png)
 
 ## 截区域、整屏或单个窗口
 
