@@ -41,12 +41,26 @@ enum UIKey: String, CaseIterable {
     case interfaceLanguage
     case guideTitle
     case guideIntro
-    case guideCapture
-    case guideMarkup
-    case guideToolbar
-    case guideCopy
-    case guideCancel
     case guidePermission
+    case practicePress
+    case practiceStart
+    case practiceShortcutFallback
+    case practiceReplay
+    case practicePermissionBody
+    case practiceSelectTitle
+    case practiceSelectDetail
+    case practiceStep
+    case practiceHideTips
+    case practiceRectangle
+    case practiceArrow
+    case practicePen
+    case practiceText
+    case practiceMosaic
+    case practiceColor
+    case practiceUndo
+    case practiceDownload
+    case practiceCancel
+    case practiceConfirm
     case next
     case back
     case done

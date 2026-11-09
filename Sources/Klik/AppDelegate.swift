@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if hotKey == nil {
             hotKey = try GlobalHotKey { [weak self] in
                 guard let self else { return }
+                guard self.overlay == nil, self.captureTask == nil, !self.presentingAlert else { return }
+                if self.setup == nil, self.preferences.savedShortcut == nil { self.showSetup() }
                 if self.setup?.handleRegisteredShortcut(self.preferences.shortcut) == true { return }
                 self.beginCapture()
             }
@@ -48,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             shortcut: preferences.shortcut, firstRun: preferences.savedShortcut == nil, issue: issue,
             language: preferences.language,
             changeLanguage: { [weak self] language in self?.preferences.language = language },
+            startPractice: { [weak self] guide in self?.beginCapture(practice: guide) },
             save: { [weak self] shortcut in
                 guard let self else { return }
                 try self.enableShortcut(shortcut)
@@ -64,15 +67,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
-    private func beginCapture() {
+    private func beginCapture(practice: ShortcutSetup? = nil) {
         guard overlay == nil, captureTask == nil, !presentingAlert else { return }
         let strings = preferences.strings
 
         if !CGPreflightScreenCaptureAccess(), !CGRequestScreenCaptureAccess() {
             presentingAlert = true
+            if practice != nil { NSApp.activate() }
             let alert = NSAlert()
             alert.messageText = strings(.permissionTitle)
-            alert.informativeText = strings(.permissionBody, preferences.shortcut.title(using: strings))
+            alert.informativeText = practice == nil
+                ? strings(.permissionBody, preferences.shortcut.title(using: strings))
+                : strings(.practicePermissionBody)
             alert.addButton(withTitle: strings(.openSystemSettings))
             alert.addButton(withTitle: strings(.cancel))
             if alert.runModal() == .alertFirstButtonReturn,
@@ -94,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = screen.frame
         let scale = screen.backingScaleFactor
         let id = displayID.uint32Value
+        practice?.window?.orderOut(nil)
         captureTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.captureTask = nil }
@@ -104,14 +111,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         && ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
                 }) else { throw CaptureError.displayChanged }
 
-                let panel = CapturePanel(frame: frame, image: image, strings: strings) { [weak self] in
-                    self?.closeCapture()
+                let panel = CapturePanel(frame: frame, image: image, strings: strings, guided: practice != nil) {
+                    [weak self, weak practice] outcome in
+                    self?.closeCapture(restoreFocus: practice == nil)
+                    practice?.returnFromPractice(outcome)
                 }
                 guard try await self.presentCapture(panel) else {
                     throw CaptureError.overlayFocus
                 }
             } catch {
-                self.closeCapture()
+                self.closeCapture(restoreFocus: practice == nil)
+                practice?.returnFromPractice(.cancelled)
                 self.showAlert(strings(.captureFailed), strings.message(for: error, fallback: .captureRetry))
             }
         }

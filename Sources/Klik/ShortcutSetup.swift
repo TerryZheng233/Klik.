@@ -2,9 +2,11 @@ import AppKit
 
 @MainActor
 final class ShortcutSetup: NSWindowController, NSWindowDelegate {
-    private enum Step { case guide, shortcut }
+    private enum Step { case practice, review, settings }
 
     private let firstRun: Bool
+    private let currentShortcut: CaptureShortcut
+    private let startPractice: (ShortcutSetup) -> Void
     private let save: (CaptureShortcut) throws -> Void
     private let changeLanguage: (LanguagePreference) -> Void
     private let didClose: () -> Void
@@ -17,12 +19,15 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
     init(shortcut: CaptureShortcut, firstRun: Bool, issue: Error?,
          language: LanguagePreference, changeLanguage: @escaping (LanguagePreference) -> Void,
+         startPractice: @escaping (ShortcutSetup) -> Void,
          save: @escaping (CaptureShortcut) throws -> Void, didClose: @escaping () -> Void) {
         self.firstRun = firstRun
+        self.currentShortcut = shortcut
+        self.startPractice = startPractice
         self.save = save
         self.changeLanguage = changeLanguage
         self.didClose = didClose
-        self.step = firstRun ? .guide : .shortcut
+        self.step = firstRun ? .practice : .settings
         self.selected = shortcut
         self.issue = issue
         self.language = language
@@ -54,6 +59,10 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
     // An already registered shortcut arrives through Carbon.
     func handleRegisteredShortcut(_ shortcut: CaptureShortcut) -> Bool {
+        if step == .practice {
+            startPractice(self)
+            return true
+        }
         guard window?.isKeyWindow == true else { return false }
         if recordingMonitor != nil { accept(shortcut) }
         return true
@@ -64,14 +73,24 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         didClose()
     }
 
-    @objc private func goToShortcut() {
-        step = .shortcut
+    func returnFromPractice(_ outcome: CapturePanel.Outcome) {
+        if outcome == .exported {
+            step = .review
+            selected = currentShortcut
+            render()
+        }
+        present()
+    }
+
+    @objc private func openPractice() {
+        step = .practice
         render()
     }
 
-    @objc private func goBack() {
-        stopRecording()
-        step = .guide
+    @objc private func startPracticeFromButton() { startPractice(self) }
+
+    @objc private func returnToSettings() {
+        step = .settings
         render()
     }
 
@@ -141,7 +160,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     private func render() {
-        window?.title = "Klik. · " + strings(firstRun ? .setupTitle : .settingsTitle)
+        window?.title = "Klik. · " + strings(step == .settings ? .settingsTitle : .setupTitle)
         let root = SetupSurface(color: KlikTheme.window, cornerRadius: 0)
         let content = stack(.vertical, spacing: 12)
         let footer = stack(.horizontal, spacing: 8)
@@ -162,7 +181,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         header.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         content.setCustomSpacing(22, after: header)
 
-        if step == .guide {
+        if step == .practice {
             addGuide(to: content, footer: footer)
         } else {
             addShortcut(to: content, footer: footer)
@@ -180,12 +199,12 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
         let words = stack(.vertical, spacing: 3)
         words.addArrangedSubview(label("Klik.", size: 17, weight: .bold))
-        let stepLabel = firstRun ? (step == .guide ? "01 / 02" : "02 / 02") : nil
-        let subtitle = strings(firstRun ? .setupTitle : .settingsTitle)
+        let stepLabel = step == .settings ? nil : (step == .practice ? "01 / 02" : "02 / 02")
+        let subtitle = strings(step == .settings ? .settingsTitle : .setupTitle)
         words.addArrangedSubview(label([subtitle, stepLabel].compactMap { $0 }.joined(separator: "  ·  "),
                                        size: 11, weight: .medium, color: .secondaryLabelColor))
         row.addArrangedSubview(words)
-        if firstRun {
+        if step != .settings {
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(spacer)
@@ -197,25 +216,29 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private func addGuide(to content: NSStackView, footer: NSStackView) {
         content.addArrangedSubview(label(strings(.guideTitle), size: 30, weight: .bold))
         content.addArrangedSubview(label(strings(.guideIntro), color: .secondaryLabelColor))
-        let operations = stack(.vertical, spacing: 10)
-        operations.addArrangedSubview(operation(selected.title(using: strings), strings(.guideCapture)))
-        operations.addArrangedSubview(operation(strings(.guideToolbar), strings(.guideMarkup)))
-        operations.addArrangedSubview(operation("Enter", strings(.guideCopy)))
-        operations.addArrangedSubview(operation("Esc", strings(.guideCancel)))
-        let card = SetupSurface(color: KlikTheme.card, cornerRadius: 15, outlined: true, content: operations)
+        let keys = stack(.vertical, spacing: 6)
+        keys.addArrangedSubview(label(strings(.practicePress), size: 12, weight: .semibold, color: .secondaryLabelColor))
+        keys.addArrangedSubview(label(currentShortcut.title(using: strings), size: 42, weight: .bold))
+        let card = SetupSurface(color: KlikTheme.keycap, cornerRadius: 15, content: keys, inset: 18)
         content.addArrangedSubview(card)
         card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        content.addArrangedSubview(label(strings(.guidePermission), size: 11, color: .secondaryLabelColor))
-        footer.addArrangedSubview(button(strings(.next), #selector(goToShortcut), primary: true))
+        content.addArrangedSubview(label(strings(.guidePermission), size: 12, color: .secondaryLabelColor))
+        if issue != nil {
+            content.addArrangedSubview(label(strings(.practiceShortcutFallback, currentShortcut.title(using: strings)),
+                                             size: 12, color: .systemRed))
+        }
+        if !firstRun { footer.addArrangedSubview(button(strings(.back), #selector(returnToSettings))) }
+        footer.addArrangedSubview(button(strings(.practiceStart), #selector(startPracticeFromButton), primary: true))
     }
 
     private func addShortcut(to content: NSStackView, footer: NSStackView) {
         let recording = recordingMonitor != nil
-        let title = firstRun ? strings(.shortcutPrompt) : strings(.settingsTitle)
+        let reviewing = step == .review
+        let title = reviewing ? strings(.shortcutPrompt) : strings(.settingsTitle)
         content.addArrangedSubview(label(title, size: 30, weight: .bold))
-        content.addArrangedSubview(label(strings(firstRun ? .shortcutIntro : .settingsIntro), color: .secondaryLabelColor))
+        content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: .secondaryLabelColor))
 
-        if !firstRun {
+        if !reviewing {
             let row = stack(.horizontal, spacing: 10)
             let words = stack(.vertical, spacing: 4)
             words.addArrangedSubview(label(strings(.language), weight: .semibold))
@@ -242,19 +265,19 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                                              size: 12, color: .systemRed))
         } else if recording {
             content.addArrangedSubview(label(strings(.recordingHint), size: 12, color: .secondaryLabelColor))
-        } else if firstRun {
+        } else if reviewing {
             content.addArrangedSubview(label(strings(.reopenHint), size: 12, color: .secondaryLabelColor))
         }
 
         if recording {
             footer.addArrangedSubview(button(strings(.cancelRecording), #selector(cancelRecording)))
         } else {
-            if firstRun { footer.addArrangedSubview(button(strings(.back), #selector(goBack))) }
+            if !reviewing { footer.addArrangedSubview(button(strings(.practiceReplay), #selector(openPractice))) }
             if !selected.matches(.defaultShortcut) {
                 footer.addArrangedSubview(button(strings(.restoreDefault), #selector(restoreDefault)))
             }
             footer.addArrangedSubview(button(strings(.recordShortcut), #selector(beginRecording)))
-            let action: UIKey = firstRun ? (selected.matches(.defaultShortcut) ? .useDefault : .useShortcut) : .done
+            let action: UIKey = reviewing ? (selected.matches(.defaultShortcut) ? .useDefault : .useShortcut) : .done
             footer.addArrangedSubview(button(strings(action), #selector(finish), primary: true))
         }
     }
@@ -268,17 +291,6 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         picker.action = #selector(chooseLanguage(_:))
         picker.setAccessibilityLabel(strings(.language))
         return picker
-    }
-
-    private func operation(_ key: String, _ description: String) -> NSStackView {
-        let row = stack(.horizontal, spacing: 12)
-        let keyLabel = label(key, size: 12, weight: .semibold)
-        keyLabel.alignment = .center
-        let keycap = SetupSurface(color: KlikTheme.keycap, cornerRadius: 7, content: keyLabel, inset: 6)
-        keycap.widthAnchor.constraint(equalToConstant: 70).isActive = true
-        row.addArrangedSubview(keycap)
-        row.addArrangedSubview(label(description, size: 13))
-        return row
     }
 
     private func stack(_ orientation: NSUserInterfaceLayoutOrientation, spacing: CGFloat) -> NSStackView {

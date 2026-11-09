@@ -37,6 +37,14 @@ In 0.1.8, Klik. follows your system’s preferred language by default. To switch
 
 ![The English quick start in light appearance and Simplified Chinese settings in dark appearance.](docs/klik-interface.png)
 
+## Take a practice capture
+
+In 0.1.9, the first-run guide starts with **⌥A**. If macOS asks for screen recording access, grant it and return to the guide. Drag a selection to reveal the toolbar. The guide highlights each button in turn, and you can use the tools as you go.
+
+![A green outline highlights the rectangle button while a tip below the toolbar explains how to use it.](docs/klik-practice.png)
+
+Press **Enter** to copy your capture or **↓** to save a PNG. Klik. then asks whether you want to keep the shortcut or record a different one. **Esc** returns to the practice screen. Reopen Klik. and select **Practice a Capture…** to do it again.
+
 ## While you capture
 
 | Control | What it does |

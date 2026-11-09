@@ -2,11 +2,14 @@ import AppKit
 import Carbon
 
 final class CapturePanel: NSPanel {
+    enum Outcome { case cancelled, exported }
+
     private let canvas: CaptureView
 
-    init(frame: CGRect, image: CGImage, strings: AppStrings = AppStrings(), finish: @escaping () -> Void) {
+    init(frame: CGRect, image: CGImage, strings: AppStrings = AppStrings(),
+         guided: Bool = false, finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
-                             strings: strings, finish: finish)
+                             strings: strings, guided: guided, finish: finish)
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -83,13 +86,13 @@ private final class PointerView: NSImageView {
 private enum Tool: CaseIterable {
     case rectangle, arrow, pen, text, mosaic
 
-    var item: (symbol: String, label: UIKey) {
+    var item: (symbol: String, label: UIKey, detail: UIKey) {
         switch self {
-        case .rectangle: return ("rectangle-horizontal", .toolRectangle)
-        case .arrow: return ("arrow-up-right", .toolArrow)
-        case .pen: return ("pencil", .toolPen)
-        case .text: return ("type", .toolText)
-        case .mosaic: return ("grid-3x3", .toolMosaic)
+        case .rectangle: return ("rectangle-horizontal", .toolRectangle, .practiceRectangle)
+        case .arrow: return ("arrow-up-right", .toolArrow, .practiceArrow)
+        case .pen: return ("pencil", .toolPen, .practicePen)
+        case .text: return ("type", .toolText, .practiceText)
+        case .mosaic: return ("grid-3x3", .toolMosaic, .practiceMosaic)
         }
     }
 
@@ -127,7 +130,9 @@ private final class CaptureView: NSView {
 
     private let background: CaptureImage
     private let strings: AppStrings
-    private let finish: () -> Void
+    private let finish: (CapturePanel.Outcome) -> Void
+    private let coach: CaptureCoach?
+    private var practiceSteps: [CaptureCoach.Step] = []
     private let toolbar = NSVisualEffectView()
     private let palette = NSVisualEffectView()
     private let errorLabel = NSTextField(labelWithString: "")
@@ -154,13 +159,20 @@ private final class CaptureView: NSView {
     private var pointerHotSpot = CGPoint.zero
     private var systemCursorHidden = false
 
-    init(background: CaptureImage, strings: AppStrings, finish: @escaping () -> Void) {
+    init(background: CaptureImage, strings: AppStrings, guided: Bool,
+         finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.background = background
         self.strings = strings
+        self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
         super.init(frame: CGRect(origin: .zero, size: background.size))
         buildToolbar()
         buildPalette()
+        if let coach {
+            addSubview(coach)
+            coach.onChange = { [weak self] in self?.refresh() }
+            coach.showSelectionPrompt(in: bounds)
+        }
         errorLabel.font = .systemFont(ofSize: 13, weight: .medium)
         errorLabel.textColor = .white
         errorLabel.backgroundColor = NSColor(white: 0.12, alpha: 0.96)
@@ -216,7 +228,8 @@ private final class CaptureView: NSView {
         if let textField, textField.frame.contains(point) {
             next = .text
         } else if (!toolbar.isHidden && toolbar.frame.contains(point))
-                    || (!palette.isHidden && palette.frame.contains(point)) {
+                    || (!palette.isHidden && palette.frame.contains(point))
+                    || coach?.hitTest(point) != nil {
             next = .arrow
         } else if case .resize(let handle, _, _) = drag {
             next = .resize(handle)
@@ -373,21 +386,26 @@ private final class CaptureView: NSView {
         for (index, tool) in Tool.allCases.enumerated() {
             let button = NSButton()
             button.tag = index
-            configure(button, tool.item, action: #selector(pickTool(_:)))
+            let item = tool.item
+            configure(button, (item.symbol, item.label), action: #selector(pickTool(_:)))
             toolButtons[tool] = button
             toolbarButtons.append(button)
+            practiceSteps.append(.init(button: button, detail: item.detail))
         }
+        practiceSteps.append(.init(button: inkButton, detail: .practiceColor))
         configure(undoButton, ("undo", .toolUndo), action: #selector(undo))
         toolbarButtons.append(undoButton)
-        let actions: [(String, UIKey, Selector)] = [
-            ("download", .toolDownload, #selector(download)),
-            ("x", .toolCancel, #selector(cancel)),
-            ("check", .toolConfirm, #selector(confirm))
+        practiceSteps.append(.init(button: undoButton, detail: .practiceUndo))
+        let actions: [(String, UIKey, UIKey, Selector)] = [
+            ("download", .toolDownload, .practiceDownload, #selector(download)),
+            ("x", .toolCancel, .practiceCancel, #selector(cancel)),
+            ("check", .toolConfirm, .practiceConfirm, #selector(confirm))
         ]
-        for (symbol, label, action) in actions {
+        for (symbol, label, detail, action) in actions {
             let button = NSButton()
             configure(button, (symbol, label), action: action)
             toolbarButtons.append(button)
+            practiceSteps.append(.init(button: button, detail: detail))
         }
         for button in toolbarButtons {
             toolbar.addSubview(button)
@@ -398,6 +416,8 @@ private final class CaptureView: NSView {
             toolbar.addSubview(divider)
         }
         configureSwatch(inkButton, action: #selector(togglePalette))
+        inkButton.wantsLayer = true
+        inkButton.layer?.cornerRadius = 6
         inkButton.isHidden = true
         toolbar.addSubview(inkButton)
         layoutToolbarButtons()
@@ -525,7 +545,7 @@ private final class CaptureView: NSView {
 
     private func refresh() {
         needsDisplay = true
-        let needsInk = tool?.usesInk == true
+        let needsInk = tool?.usesInk == true || coach?.isDismissed == false
         if inkButton.isHidden == needsInk {
             inkButton.isHidden = !needsInk
             layoutToolbarButtons()
@@ -555,6 +575,17 @@ private final class CaptureView: NSView {
             palette.isHidden = true
         }
         undoButton.isEnabled = !marks.isEmpty || isEditingText
+        if let coach {
+            if drag != nil || isEditingText {
+                coach.hide()
+            } else if let selection {
+                coach.showToolbar(practiceSteps, toolbar: toolbar.frame,
+                                  palette: palette.isHidden ? nil : palette.frame,
+                                  selection: selection, in: bounds)
+            } else {
+                coach.showSelectionPrompt(in: bounds)
+            }
+        }
     }
 
     @objc private func pickTool(_ sender: NSButton) {
@@ -605,7 +636,7 @@ private final class CaptureView: NSView {
         refresh()
     }
 
-    @objc func cancel() { finish() }
+    @objc func cancel() { finish(.cancelled) }
     @objc private func download() { export(.downloads) }
     @objc private func confirm() { export(.clipboard) }
 
@@ -646,7 +677,7 @@ private final class CaptureView: NSView {
                 return
             }
         }
-        finish()
+        finish(.exported)
     }
 
     private func report(_ message: String) {
