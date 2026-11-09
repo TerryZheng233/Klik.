@@ -2,60 +2,58 @@
   <img src="docs/klik-icon.png" alt="Klik. app icon" width="88">
 </p>
 <h1 align="center">Klik.</h1>
-<p align="center">A lightweight Mac screenshot tool that copies to the clipboard and brings you back to your app.</p>
+<p align="center">Take a screenshot. Keep your train of thought.</p>
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="https://github.com/TerryZheng233/Klik/releases/latest">Download DMG</a> ·
   Apple silicon · macOS 14+
 </p>
 
-While reading a PDF in full-screen Preview, press **⌥A**, drag over the part you want to share, and press **Enter** to copy it. Klik. returns keyboard focus to Preview, so you can press **→** and turn the page straight away.
+You’re halfway through a PDF in full-screen Preview and come across a paragraph you want to share. Press **⌥A**, drag over it, and hit **Enter**. The image is ready to paste. Press **→** and you’re on the next page.
 
-## Why I built Klik.
+## Why I made Klik.
 
-When I use WeChat’s screenshot tool, confirming a capture takes me back to WeChat. That breaks the flow when I’m reading or playing a game in full screen. With the default Mac screenshot shortcut, a quick image I only meant to share leaves another file on my desktop. I wanted a small tool I could call up for a moment and then get back to what I was doing.
+I like WeChat’s screenshot tool. After I confirm a screenshot, I end up looking at WeChat again. That’s especially distracting when I’m reading or playing a game in full screen. The Mac’s default shortcut leaves a file on my desktop each time, even for a screenshot I only meant to paste into a chat.
 
-- **Copy and paste to share.** The clipboard is the default. Click the save button when you want a PNG in Downloads.
-- **Mark up right in the selection.** Draw rectangles or arrows, sketch with the pen, add text, or brush over details to pixelate them.
-- **Call it up with a shortcut.** Klik. runs in the background. Keep **⌥A** or record a shortcut that feels natural to you.
+I wanted a small Mac app I could call up for a quick screenshot. Klik. stays in the background and puts the toolbar beside your selection. Draw a box around a detail, point to it with an arrow, or add a few words. There’s a pen and a pixelation brush too. If you want to keep a file, click the save button for a PNG in Downloads.
 
-![Klik. frames a Wikipedia article and marks February 29 with a red rectangle and arrow.](docs/klik-preview.png)
+![A Wikipedia page about leap years with February 29 marked by a red box and arrow.](docs/klik-preview.png)
 
-## Capture a region, a display, or a window
+## Choose what to capture
 
-| While capturing | What it does |
+| Do this | What happens |
 | --- | --- |
-| **Drag** | Select a region. Drag an edge or corner to adjust it |
-| **Click** | Select the entire display under the pointer |
-| **Hold Space and click** | Highlight and capture a single window, including the parts covered by other windows |
-| **Enter** or **✓** | Copy the annotated image to the clipboard |
-| **↓** | Save a PNG to Downloads |
+| **Drag** | Frame part of the screen. Pull an edge or corner to adjust the selection |
+| **Click** | Select the whole display under your pointer |
+| **Hold Space and click** | Select a single window, including the parts another window covers |
+| **Enter** or **✓** | Copy the screenshot with your annotations |
+| **Save PNG button (↓)** | Save a PNG in Downloads |
 | **Esc** or **×** | Cancel the capture |
-| **⌘Z** | Undo the last mark |
+| **⌘Z** | Undo your last annotation |
 
-To capture a partially covered window, hold **Space** and point at any exposed part of it. Click to reveal its full contents in the editor, ready to mark up or copy. The illustration uses a sample browser and Notes scene.
+If a window is partly covered, hold **Space** and point to a bit you can still see. Click it and the full window appears in the selection.
 
-![Before and after window capture. Notes covers the browser on the left. After selecting the browser window, the full page appears in the editor on the right.](docs/klik-window.png)
+![A browser window partly covered by Notes on the left. The full browser window appears in the capture editor on the right.](docs/klik-window.png)
 
-## Install and take your first screenshot
+## Install Klik.
 
-1. Download the [latest DMG](https://github.com/TerryZheng233/Klik/releases/latest), open it, and drag **Klik.app** into **Applications**.
-2. Open Klik. and press **⌥A**. Grant **Screen & System Audio Recording** access when macOS asks, then reopen Klik. if prompted.
-3. Try a capture. The guide explains each toolbar button on screen, then asks whether you want to keep the shortcut or record a new one.
+1. Open the [latest DMG](https://github.com/TerryZheng233/Klik/releases/latest) and drag **Klik.app** to **Applications**.
+2. Launch Klik. and press **⌥A**. macOS will ask for **Screen & System Audio Recording** access. After granting it, reopen Klik. if macOS asks you to.
+3. Take a practice screenshot. The guide shows you what the toolbar buttons do, then asks whether to keep **⌥A** or record your own shortcut.
 
 <p align="center">
   <img src="docs/klik-install.png" alt="Klik. disk image with Klik.app on the left and the Applications shortcut on the right" width="520">
 </p>
 
-Reopen Klik. from Applications to change the shortcut or choose **Follow System**, **English**, or **简体中文** under **Language**. Select **Practice a Capture…** to replay the guide. The guide and settings follow macOS light and dark appearance.
+Open Klik. again from Applications to change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance. To run through the guide again, choose **Practice a Capture…**.
 
-![The English quick-start screen in light appearance and the Simplified Chinese settings in dark appearance.](docs/klik-interface.png)
+![Klik.’s quick-start guide in English and light mode, alongside settings in Simplified Chinese and dark mode.](docs/klik-interface.png)
 
-To start Klik. at sign-in, add it under **System Settings → General → Login Items → Open at Login**.
+To have Klik. ready when you sign in, add it under **System Settings → General → Login Items → Open at Login**.
 
-## Let your agent install Klik.
+## Install with an agent
 
-Attach `Klik-0.1.13-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) is private. If you lack access, ask the person who invited you to try Klik. to send you the DMG and its SHA‑256 file.
+Attach `Klik-0.1.13-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.13 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13) is private. If you can’t open it, ask the person who invited you to try Klik. for the DMG and its SHA‑256 file.
 
 ```text
 Help me install Klik. 0.1.13 on this Mac using the DMG I attached. If I haven’t attached it, use the v0.1.13 Release at https://github.com/TerryZheng233/Klik/releases/tag/v0.1.13. If you can’t access it, ask me for the file.
@@ -68,7 +66,7 @@ Help me install Klik. 0.1.13 on this Mac using the DMG I attached. If I haven’
 
 ## Build from source
 
-Requires Swift 5.10 or later and the macOS 15 SDK or later.
+Use Swift 5.10 or newer and the macOS 15 SDK or newer.
 
 ```sh
 swift test
@@ -76,9 +74,9 @@ swift test
 open -g .build/Klik.app
 ```
 
-The GitHub DMG is ad hoc signed and has not been notarized. macOS may block a downloaded copy on first launch or ask for screen recording permission after an update. Local builds use the sole **Apple Development** identity in Keychain when available. To select an identity explicitly, set `KLIK_SIGN_IDENTITY`. Keep the same identity when updating a locally signed copy to preserve its permissions. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+The GitHub DMG is ad hoc signed and hasn’t been notarized. macOS may block it on first launch or ask for screen recording access again after an update. For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Use the same identity for local updates to keep the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
-To create the drag-to-install disk image, use [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/):
+[dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/) makes the drag-to-install DMG.
 
 ```sh
 KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
@@ -87,4 +85,4 @@ dmgbuild -s Packaging/dmg-settings.py \
   'Klik.' Klik-0.1.13-arm64.dmg
 ```
 
-Toolbar icons are from [Lucide](https://lucide.dev/icons/). See the [included license](Resources/Lucide/LICENSE).
+Klik. uses toolbar icons from [Lucide](https://lucide.dev/icons/). The [license](Resources/Lucide/LICENSE) is included in the repository.
