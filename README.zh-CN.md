@@ -6,7 +6,7 @@
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="CHANGELOG.md">更新日志</a> ·
-  <a href="https://github.com/TerryZheng233/Klik/releases/latest">下载 DMG</a> ·
+  <a href="https://github.com/TerryZheng233/Klik./releases/latest">下载 DMG</a> ·
   Apple 芯片 · macOS 14+
 </p>
 
@@ -42,7 +42,7 @@
 
 ## 安装 Klik.
 
-1. 打开[最新 DMG](https://github.com/TerryZheng233/Klik/releases/latest)，把 **Klik.app** 拖进「应用程序」。
+1. 打开[最新 DMG](https://github.com/TerryZheng233/Klik./releases/latest)，把 **Klik.app** 拖进「应用程序」。
 2. 打开 Klik.，按 **⌥A**。macOS 会提示授予「屏幕与系统音频录制」权限。授权后，如果系统提示重新打开 Klik.，照做后再试。
 3. 先练习截一张。引导会在工具栏旁告诉你每个按钮怎么用。截完可以保留 **⌥A**，也可以录一组顺手的快捷键。
 
@@ -64,7 +64,7 @@
 
 ```text
 请从下面的页面下载最新版本，在这台 Mac 上安装 Klik.：
-https://github.com/TerryZheng233/Klik/releases/latest
+https://github.com/TerryZheng233/Klik./releases/latest
 
 1. 确认这台 Mac 使用 Apple 芯片，系统是 macOS 14 或更新版本。找到最新 Release，下载 DMG 和对应的 SHA-256 校验文件。如果无法访问 Release 或找不到这两个文件，请告诉我遇到了什么问题。下载后核对 DMG，校验不符就停止。
 2. 打开 DMG，把 Klik.app 复制到「应用程序」，确认安装版本与 Release 一致，再推出安装盘。如果已经装过 Klik.，替换前先问我。

@@ -6,7 +6,7 @@
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="https://github.com/TerryZheng233/Klik/releases/latest">Download DMG</a> ·
+  <a href="https://github.com/TerryZheng233/Klik./releases/latest">Download DMG</a> ·
   Apple silicon · macOS 14+
 </p>
 
@@ -42,7 +42,7 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 
 ## Install Klik.
 
-1. Open the [latest DMG](https://github.com/TerryZheng233/Klik/releases/latest) and drag **Klik.app** to **Applications**.
+1. Open the [latest DMG](https://github.com/TerryZheng233/Klik./releases/latest) and drag **Klik.app** to **Applications**.
 2. Launch Klik. and press **⌥A**. macOS will ask for **Screen & System Audio Recording** access. After granting it, reopen Klik. if macOS asks you to.
 3. Take a practice screenshot. The guide shows you what the toolbar buttons do, then asks whether to keep **⌥A** or record your own shortcut.
 
@@ -64,7 +64,7 @@ Paste this prompt into a chat with an agent that can use your Mac and access Git
 
 ```text
 Help me install the latest Klik. release on this Mac from:
-https://github.com/TerryZheng233/Klik/releases/latest
+https://github.com/TerryZheng233/Klik./releases/latest
 
 1. Check that my Mac has Apple silicon and runs macOS 14 or later. Find the latest release and download its DMG and matching SHA-256 file. If you cannot access the release or find both files, explain what is blocking you. Verify the DMG against the checksum and stop if it does not match.
 2. Mount the DMG, copy Klik.app to /Applications, check that the installed version matches the release, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
