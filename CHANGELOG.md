@@ -2,7 +2,7 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
-## Unreleased / 尚未发布
+## 0.1.17 — 2026-11-09
 
 **English**
 

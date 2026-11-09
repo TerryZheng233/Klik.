@@ -10,8 +10,6 @@
   Apple silicon · macOS 14+
 </p>
 
-> The illustrations and some features below show unreleased changes on the main branch. The latest downloadable release may look or behave differently.
-
 Whether you’re reading a paper, browsing a website, or playing a game, press **⌥A** when you see something you want to capture. Select it, then hit **Enter** or simply double-click inside the selection. Your screenshot is ready to paste, and you can carry on with what you were doing. Klik. also keeps recent screenshots on your Mac, so you can find and copy them again from the menu bar.
 
 ## Why I made Klik.
