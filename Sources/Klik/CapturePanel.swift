@@ -376,8 +376,8 @@ private final class CaptureView: NSView {
         configure(undoButton, ("undo", "撤销（⌘Z）"), action: #selector(undo))
         toolbarButtons.append(undoButton)
         for (symbol, label, action) in [
-            ("x", "取消（Esc）", #selector(cancel)),
             ("download", "下载 PNG", #selector(download)),
+            ("x", "取消（Esc）", #selector(cancel)),
             ("check", "复制并完成（Enter）", #selector(confirm))
         ] {
             let button = NSButton()
@@ -494,7 +494,11 @@ private final class CaptureView: NSView {
         button.refusesFirstResponder = true
         button.wantsLayer = true
         button.layer?.cornerRadius = 6
-        button.contentTintColor = item.symbol == "check" ? .systemGreen : .white
+        switch item.symbol {
+        case "x": button.contentTintColor = .systemRed
+        case "check": button.contentTintColor = .systemGreen
+        default: button.contentTintColor = .white
+        }
     }
 
     private func refresh() {
