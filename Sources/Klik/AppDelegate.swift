@@ -1,21 +1,60 @@
 import AppKit
-import Carbon
 import ScreenCaptureKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let preferences = ShortcutPreferences()
     private var hotKey: GlobalHotKey?
+    private var setup: ShortcutSetup?
     private var captureTask: Task<Void, Never>?
     private var overlay: CapturePanel?
     private var previousForegroundApp: NSRunningApplication?
     private var presentingAlert = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        var shortcutIssue: String?
         do {
-            hotKey = try GlobalHotKey { [weak self] in self?.beginCapture() }
+            try enableShortcut(preferences.shortcut)
         } catch {
-            showAlert("无法注册 ⌥A", "请检查其他截图工具或全局快捷键是否占用了 ⌥A，然后重新打开 Klik。\n系统状态码：\(error.localizedDescription)")
-            NSApp.terminate(nil)
+            shortcutIssue = error.localizedDescription
         }
+        if preferences.savedShortcut == nil || shortcutIssue != nil {
+            showSetup(issue: shortcutIssue)
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if overlay == nil, captureTask == nil, !presentingAlert { showSetup() }
+        return false
+    }
+
+    private func enableShortcut(_ shortcut: CaptureShortcut) throws {
+        if hotKey == nil {
+            hotKey = try GlobalHotKey { [weak self] in
+                guard let self else { return }
+                if self.setup?.handleRegisteredShortcut(self.preferences.shortcut) == true { return }
+                self.beginCapture()
+            }
+        }
+        try hotKey?.register(shortcut)
+    }
+
+    @MainActor
+    private func showSetup(issue: String? = nil) {
+        if let setup {
+            setup.present()
+            return
+        }
+        let controller = ShortcutSetup(
+            shortcut: preferences.shortcut, firstRun: preferences.savedShortcut == nil, issue: issue,
+            save: { [weak self] shortcut in
+                guard let self else { return }
+                try self.enableShortcut(shortcut)
+                try self.preferences.save(shortcut)
+            },
+            didClose: { [weak self] in self?.setup = nil }
+        )
+        setup = controller
+        controller.present()
     }
 
     func applicationDidResignActive(_ notification: Notification) {
@@ -30,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             presentingAlert = true
             let alert = NSAlert()
             alert.messageText = "允许 Klik 截取屏幕"
-            alert.informativeText = "在系统设置的「隐私与安全性 → 屏幕与系统音频录制」中开启 Klik。若系统提示重新打开，请照做，再按 ⌥A。"
+            alert.informativeText = "在系统设置的「隐私与安全性 → 屏幕与系统音频录制」中开启 Klik。若系统提示重新打开，请照做，再按 \(preferences.shortcut.title)。"
             alert.addButton(withTitle: "打开系统设置")
             alert.addButton(withTitle: "取消")
             if alert.runModal() == .alertFirstButtonReturn,
@@ -45,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main,
               let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
         else {
-            showAlert("无法识别显示器", "请重新按 ⌥A。")
+            showAlert("无法识别显示器", "请重新按截图快捷键。")
             return
         }
 
@@ -137,54 +176,8 @@ private enum CaptureError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .displayChanged: return "显示器状态已变化，请重新按 ⌥A。"
-        case .overlayFocus: return "截图浮层未获得键盘焦点，请重新按 ⌥A。"
+        case .displayChanged: return "显示器状态已变化，请重新按截图快捷键。"
+        case .overlayFocus: return "截图浮层未获得键盘焦点，请重新按截图快捷键。"
         }
     }
-}
-
-private final class GlobalHotKey {
-    private var handler: EventHandlerRef?
-    private var key: EventHotKeyRef?
-    private let action: @MainActor () -> Void
-
-    init(action: @escaping @MainActor () -> Void) throws {
-        self.action = action
-
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                 eventKind: UInt32(kEventHotKeyPressed))
-        let status = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
-            guard let event, let context else { return OSStatus(eventNotHandledErr) }
-            var id = EventHotKeyID()
-            let result = GetEventParameter(event, EventParamName(kEventParamDirectObject),
-                                           EventParamType(typeEventHotKeyID), nil,
-                                           MemoryLayout<EventHotKeyID>.size, nil, &id)
-            guard result == noErr, id.signature == 0x54534E50, id.id == 1 else {
-                return OSStatus(eventNotHandledErr)
-            }
-            let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(context).takeUnretainedValue()
-            DispatchQueue.main.async { hotKey.action() }
-            return noErr
-        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
-
-        guard status == noErr else { throw HotKeyError(status: status) }
-        let id = EventHotKeyID(signature: 0x54534E50, id: 1)
-        let registration = RegisterEventHotKey(UInt32(kVK_ANSI_A), UInt32(optionKey), id,
-                                              GetApplicationEventTarget(), UInt32(kEventHotKeyExclusive), &key)
-        guard registration == noErr else {
-            if let handler { RemoveEventHandler(handler) }
-            handler = nil
-            throw HotKeyError(status: registration)
-        }
-    }
-
-    deinit {
-        if let key { UnregisterEventHotKey(key) }
-        if let handler { RemoveEventHandler(handler) }
-    }
-}
-
-private struct HotKeyError: LocalizedError {
-    let status: OSStatus
-    var errorDescription: String? { String(status) }
 }
