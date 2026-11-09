@@ -37,6 +37,11 @@ enum Selection {
             CGPoint(x: rect.minX + horizontal * rect.width, y: rect.minY + vertical * rect.height)
         }
 
+        func boundaryPoint(in rect: CGRect, near pointer: CGPoint) -> CGPoint {
+            CGPoint(x: horizontal == 0 ? rect.minX : horizontal == 1 ? rect.maxX : pointer.x,
+                    y: vertical == 0 ? rect.minY : vertical == 1 ? rect.maxY : pointer.y)
+        }
+
         func resize(_ rect: CGRect, delta: CGPoint, in bounds: CGRect) -> CGRect {
             var left = rect.minX
             var top = rect.minY

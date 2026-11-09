@@ -62,7 +62,8 @@
 "downloadError" = "Couldn’t save to Downloads. Check Klik.’s file permissions.";
 "practicePress" = "PRESS TO START";
 "practiceStart" = "Start Practice";
-"practiceShortcutFallback" = "%@ is unavailable. Click Start Practice, then choose a different shortcut afterward.";
+"practiceShortcutFallback" = "%@ is unavailable. Choose another shortcut, or start practice first.";
+"chooseAnotherShortcut" = "Choose Another Shortcut";
 "practiceReplay" = "Practice a Capture…";
 "practicePermissionBody" = "Enable Klik. in System Settings → Privacy & Security → Screen & System Audio Recording. Reopen Klik. if asked, then return to the guide to try again.";
 "practiceSelectTitle" = "Drag to select, or click for this display";
@@ -83,3 +84,21 @@
 "windowSnapActive" = "Click a window to select it  ·  Release Space to go back";
 "windowCapturePending" = "Capturing window…";
 "windowCaptureFailed" = "Couldn’t capture this window. Select it again or drag to capture the screen.";
+"menuSettings" = "Settings…";
+"menuHistory" = "Recent Screenshots";
+"menuHistoryEmpty" = "No recent screenshots";
+"menuHistoryClear" = "Clear All";
+"menuQuit" = "Quit Klik.";
+"historyErrorTitle" = "Couldn’t access recent screenshots";
+"historyErrorBody" = "Check access to Klik.’s Application Support folder and try again.";
+"loginAtStartup" = "Open Klik. at login";
+"loginApproval" = "Allow Klik. in System Settings → General → Login Items.";
+"loginError" = "Couldn’t change the login setting. Check Login Items in System Settings.";
+"historyLimit" = "Keep recent screenshots";
+"historyLimitCount" = "%d screenshots";
+"historyStorageNote" = "Stored on this Mac. When the limit is reached, the oldest screenshots are removed.";
+
+"historyToday" = "Today";
+"historyYesterday" = "Yesterday";
+"historyPreview" = "Preview";
+"historyCopy" = "Copy";

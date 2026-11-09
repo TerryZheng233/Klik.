@@ -4,6 +4,7 @@ import Foundation
 struct WindowSnap: Equatable {
     let id: CGWindowID
     let frame: CGRect
+    var usesDesktopImage = false
 
     static func candidates(on displayID: CGDirectDisplayID, canvasSize: CGSize,
                            available: Set<CGWindowID>) -> [WindowSnap] {

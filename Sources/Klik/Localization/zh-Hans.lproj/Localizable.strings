@@ -62,7 +62,8 @@
 "downloadError" = "无法保存到「下载」。请检查 Klik. 的文件访问权限。";
 "practicePress" = "按下快捷键开始";
 "practiceStart" = "开始练习";
-"practiceShortcutFallback" = "%@ 暂不可用。可以先点「开始练习」，完成后再换一组快捷键。";
+"practiceShortcutFallback" = "%@ 暂不可用。可以换一组快捷键，也可以先开始练习。";
+"chooseAnotherShortcut" = "更换快捷键";
 "practiceReplay" = "练习截图…";
 "practicePermissionBody" = "在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」开启 Klik.。若系统提示重新打开，请照做，再回到引导继续练习。";
 "practiceSelectTitle" = "拖动框选，单击选中整块显示器";
@@ -83,3 +84,21 @@
 "windowSnapActive" = "单击选中窗口  ·  松开空格返回";
 "windowCapturePending" = "正在截取窗口…";
 "windowCaptureFailed" = "无法截取此窗口。请重新选中窗口，或拖动框选屏幕。";
+"menuSettings" = "设置…";
+"menuHistory" = "最近截图";
+"menuHistoryEmpty" = "暂无最近截图";
+"menuHistoryClear" = "清空";
+"menuQuit" = "退出 Klik.";
+"historyErrorTitle" = "无法访问最近截图";
+"historyErrorBody" = "请检查 Klik. 的应用支持文件夹访问权限，然后重试。";
+"loginAtStartup" = "登录时打开 Klik.";
+"loginApproval" = "请在「系统设置 → 通用 → 登录项」中允许 Klik.。";
+"loginError" = "无法修改登录启动设置。请检查系统设置中的登录项。";
+"historyLimit" = "最近截图保留数量";
+"historyLimitCount" = "%d 张";
+"historyStorageNote" = "保存在这台 Mac 上。达到上限后，较早的截图会被移除。";
+
+"historyToday" = "今天";
+"historyYesterday" = "昨天";
+"historyPreview" = "预览";
+"historyCopy" = "复制";

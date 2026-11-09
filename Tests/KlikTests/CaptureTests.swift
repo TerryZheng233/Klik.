@@ -140,6 +140,17 @@ final class CaptureTests: XCTestCase {
                        CGRect(x: 60, y: 0, width: 40, height: 40))
     }
 
+    func testMagnifierSamplesTheActualResizeBoundary() {
+        let rect = CGRect(x: 30, y: 40, width: 100, height: 80)
+        let offsetPointer = CGPoint(x: 126, y: 76)
+        XCTAssertEqual(Selection.Handle.right.boundaryPoint(in: rect, near: offsetPointer),
+                       CGPoint(x: 130, y: 76))
+        XCTAssertEqual(Selection.Handle.topLeft.boundaryPoint(in: rect, near: offsetPointer),
+                       CGPoint(x: 30, y: 40))
+        XCTAssertEqual(Selection.Handle.bottom.boundaryPoint(in: rect, near: offsetPointer),
+                       CGPoint(x: 126, y: 120))
+    }
+
     func testResizeHoverStaysStableNearTheEdgeBoundary() {
         let selection = CGRect(x: 30, y: 30, width: 40, height: 40)
         let justOutside = CGPoint(x: 40, y: 23)

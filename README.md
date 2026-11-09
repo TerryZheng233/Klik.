@@ -26,14 +26,15 @@ I wanted a small tool I could use without losing my place. Klik. stays in the ba
 | **Drag** | Frame part of the screen. Pull an edge or corner to adjust the selection |
 | **Click** | Select the whole display under your pointer |
 | **Hold Space and click** | Select a single window, including the parts another window covers |
-| **Double-click** | Copy the selection when no annotation tool is active. With no selection, copy the display |
-| **Hold Space and double-click a window** | Capture and copy the window |
+| **Double-click** | Copy the selected area. Hold Space and double-click to copy a window |
 | **Enter** or **✓** | Copy the screenshot with your annotations |
 | **Save PNG button (↓)** | Save a PNG in Downloads |
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
 
-To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection.
+To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection. A magnifier appears while you drag or adjust a selection, helping you line up its edges. If you have multiple displays, move the pointer to the display you want to capture.
+
+Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 
 ![A browser window partly covered by Notes on the left. The full browser window appears in the capture editor on the right.](docs/klik-window.png)
 
@@ -47,23 +48,25 @@ To capture a partly covered window, hold **Space** and point to any visible part
   <img src="docs/klik-install.png" alt="Klik. disk image with Klik.app on the left and the Applications shortcut on the right" width="520">
 </p>
 
-Open Klik. again from Applications to change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance. To run through the guide again, choose **Practice a Capture…**.
+Click the **k.** icon in the menu bar to open settings or view recent screenshots. Klik. keeps recent captures on this Mac. Select one to preview it and copy it again, or clear the list. Settings lets you choose a limit of 5, 10, 20, or 50 screenshots and turn on opening Klik. at login. When the limit is reached, the oldest captures are removed.
+
+If **⌥A** is already in use, for example by WeChat, you can choose another shortcut during setup or in settings. The two apps may not be able to use the same shortcut at the same time.
+
+In settings, you can also change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance. To run through the guide again, choose **Practice a Capture…**.
 
 ![Klik.’s quick-start guide in English and light mode, alongside settings in Simplified Chinese and dark mode.](docs/klik-interface.png)
 
-To have Klik. ready when you sign in, add it under **System Settings → General → Login Items → Open at Login**.
-
 ## Install with an agent
 
-Attach `Klik-0.1.14-arm64.dmg` to a chat with an agent that can use your Mac, then paste the prompt below. The [v0.1.14 Release](https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14) is private. If you can’t open it, ask the person who invited you to try Klik. for the DMG and its SHA‑256 file.
+Attach the DMG and its SHA-256 file to a chat with an agent that can use your Mac, then paste the prompt below. If you do not have the files, provide a link to the release you want to install.
 
 ```text
-Help me install Klik. 0.1.14 on this Mac using the DMG I attached. If I haven’t attached it, use the v0.1.14 Release at https://github.com/TerryZheng233/Klik/releases/tag/v0.1.14. If you can’t access it, ask me for the file.
+Help me install the Klik. release I attached on this Mac. If I have not attached it, ask me for the release link or files.
 
-1. Check that my Mac has Apple silicon and runs macOS 14 or later. If the SHA-256 file is available, verify the DMG against it and stop if it doesn’t match.
-2. Mount the DMG, copy Klik.app to /Applications, check that the installed version is 0.1.14, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
-3. Guide me through the first launch. If macOS blocks this unnotarized build, show me the Apple instructions at https://support.apple.com/en-us/102445 and let me decide whether to open it. Leave system security settings as they are.
-4. Ask me to press Option+A and grant Screen & System Audio Recording access when prompted. If macOS asks for a restart, have me reopen Klik. and try Option+A again.
+1. Check that my Mac has Apple silicon and runs macOS 14 or later. If the SHA-256 file is available, verify the DMG against it and stop if it does not match.
+2. Mount the DMG, copy Klik.app to /Applications, check that the installed version matches the release, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
+3. Guide me through first launch. If macOS blocks the app, show me the relevant Apple instructions and let me decide how to proceed. Leave system security settings as they are.
+4. Help me try the capture shortcut and grant screen recording access when prompted. If the shortcut is already in use, help me choose another one.
 ```
 
 ## Build from source
@@ -86,7 +89,7 @@ To make a drag-to-install DMG, use [dmgbuild](https://pypi.org/project/dmgbuild/
 KLIK_SIGN_IDENTITY=- ./build-app.sh .build/distribution
 dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
-  'Klik.' Klik-0.1.14-arm64.dmg
+  'Klik.' Klik-build-arm64.dmg
 ```
 
 Klik. uses toolbar icons from [Lucide](https://lucide.dev/icons/). The [license](Resources/Lucide/LICENSE) is included in the repository.

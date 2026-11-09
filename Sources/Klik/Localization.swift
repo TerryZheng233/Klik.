@@ -45,6 +45,7 @@ enum UIKey: String, CaseIterable {
     case practicePress
     case practiceStart
     case practiceShortcutFallback
+    case chooseAnotherShortcut
     case practiceReplay
     case practicePermissionBody
     case practiceSelectTitle
@@ -119,6 +120,23 @@ enum UIKey: String, CaseIterable {
     case renderError
     case clipboardError
     case downloadError
+    case menuSettings
+    case menuHistory
+    case menuHistoryEmpty
+    case menuHistoryClear
+    case historyToday
+    case historyYesterday
+    case historyPreview
+    case historyCopy
+    case menuQuit
+    case historyErrorTitle
+    case historyErrorBody
+    case loginAtStartup
+    case loginApproval
+    case loginError
+    case historyLimit
+    case historyLimitCount
+    case historyStorageNote
 }
 
 protocol KlikLocalizedError: Error {

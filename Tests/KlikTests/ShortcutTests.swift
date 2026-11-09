@@ -6,6 +6,40 @@ import XCTest
 final class ShortcutTests: XCTestCase {
     private let english = AppStrings(language: .english)
 
+    @MainActor
+    func testShortcutConflictKeepsExistingRegistration() throws {
+        let first = CaptureShortcut(keyCode: UInt32(kVK_F19), modifiers: UInt32(controlKey | optionKey | cmdKey), keyLabel: "F19")
+        let second = CaptureShortcut(keyCode: UInt32(kVK_F20), modifiers: UInt32(controlKey | optionKey | cmdKey), keyLabel: "F20")
+        let owner = try GlobalHotKey(action: {})
+        let other = try GlobalHotKey(action: {})
+        try owner.register(first)
+        try other.register(second)
+        XCTAssertThrowsError(try owner.register(second)) { error in
+            XCTAssertEqual((error as? KlikLocalizedError)?.message(using: english), english(.shortcutTaken))
+        }
+        let third = try GlobalHotKey(action: {})
+        XCTAssertThrowsError(try third.register(first), "The original shortcut must remain registered")
+    }
+
+    func testCaptureDoesNotStealFocusAfterUserChangesApp() {
+        XCTAssertTrue(CaptureFocus.mayPresent(startingPID: 10, currentPID: 10, ownPID: 99))
+        XCTAssertTrue(CaptureFocus.mayPresent(startingPID: 10, currentPID: 99, ownPID: 99))
+        XCTAssertFalse(CaptureFocus.mayPresent(startingPID: 10, currentPID: 20, ownPID: 99))
+        XCTAssertFalse(CaptureFocus.mayPresent(startingPID: 99, currentPID: 20, ownPID: 99))
+    }
+
+    func testHistoryLimitDefaultsToTenAndPersistsValidChoices() throws {
+        let name = "KlikHistoryPreferences-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = KlikPreferences(defaults: defaults)
+        XCTAssertEqual(preferences.historyLimit, 10)
+        preferences.historyLimit = 50
+        XCTAssertEqual(KlikPreferences(defaults: defaults).historyLimit, 50)
+        defaults.set(999, forKey: "historyLimit")
+        XCTAssertEqual(preferences.historyLimit, 10)
+    }
+
     func testRecordsPhysicalKeyAndModifiers() throws {
         let input = try key(kVK_ANSI_S, flags: [.control, .shift], characters: "S")
         let shortcut = try CaptureShortcut(recording: input)

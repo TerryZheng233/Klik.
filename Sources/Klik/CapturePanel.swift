@@ -9,10 +9,12 @@ final class CapturePanel: NSPanel {
     init(frame: CGRect, image: CGImage, windowTargets: [WindowSnap] = [], strings: AppStrings = AppStrings(),
          guided: Bool = false, captureWindow: ((CGWindowID) async throws -> CGImage)? = nil,
          pasteboard: NSPasteboard = .general,
+         recordCapture: ((Data) -> Void)? = nil,
          finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
                              windowTargets: windowTargets, strings: strings, guided: guided,
-                             captureWindow: captureWindow, pasteboard: pasteboard, finish: finish)
+                             captureWindow: captureWindow, pasteboard: pasteboard,
+                             recordCapture: recordCapture, finish: finish)
         super.init(contentRect: frame, styleMask: .borderless,
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -97,6 +99,53 @@ private final class CaptureHint: NSTextField {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
+enum MagnifierLayout {
+    static func frame(near point: CGPoint, in bounds: CGRect, size: CGFloat = 112) -> CGRect {
+        let side = min(size, bounds.width, bounds.height)
+        let gap: CGFloat = 22
+        let right = point.x + gap
+        let below = point.y + gap
+        let x = right + side <= bounds.maxX ? right : point.x - gap - side
+        let y = below + side <= bounds.maxY ? below : point.y - gap - side
+        return CGRect(x: max(bounds.minX, min(x, bounds.maxX - side)),
+                      y: max(bounds.minY, min(y, bounds.maxY - side)), width: side, height: side)
+    }
+}
+
+private final class CaptureMagnifier: NSView {
+    var source: CaptureImage? { didSet { needsDisplay = true } }
+    var samplePoint = CGPoint.zero { didSet { needsDisplay = true } }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext, let source else { return }
+        let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10, yRadius: 10)
+        context.saveGState()
+        outline.addClip()
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
+        context.translateBy(x: bounds.midX, y: bounds.midY)
+        context.scaleBy(x: 4, y: 4)
+        context.translateBy(x: -samplePoint.x, y: -samplePoint.y)
+        context.interpolationQuality = .none
+        source.draw(in: context)
+        context.restoreGState()
+
+        NSColor(srgbRed: 0.19, green: 0.65, blue: 1, alpha: 0.9).setStroke()
+        let crosshair = NSBezierPath()
+        crosshair.lineWidth = 1
+        crosshair.move(to: NSPoint(x: bounds.midX, y: 0))
+        crosshair.line(to: NSPoint(x: bounds.midX, y: bounds.height))
+        crosshair.move(to: NSPoint(x: 0, y: bounds.midY))
+        crosshair.line(to: NSPoint(x: bounds.width, y: bounds.midY))
+        crosshair.stroke()
+        NSColor.separatorColor.setStroke()
+        outline.lineWidth = 1
+        outline.stroke()
+    }
+}
+
 private enum Tool: CaseIterable {
     case rectangle, arrow, pen, text, mosaic
 
@@ -158,6 +207,7 @@ private final class CaptureView: NSView {
     private var doubleClickStart: CGPoint?
     private var copyWhenWindowReady = false
     private let pasteboard: NSPasteboard
+    private let recordCapture: ((Data) -> Void)?
     private let strings: AppStrings
     private let finish: (CapturePanel.Outcome) -> Void
     private let coach: CaptureCoach?
@@ -167,6 +217,7 @@ private final class CaptureView: NSView {
     private let modeHint = CaptureHint(labelWithString: "")
     private let errorLabel = NSTextField(labelWithString: "")
     private let pointerView = PointerView()
+    private let magnifier = CaptureMagnifier()
     private let undoButton = NSButton()
     private let inkButton = NSButton()
     private let toolbarDividers = [NSView(), NSView()]
@@ -194,11 +245,13 @@ private final class CaptureView: NSView {
     init(background: CaptureImage, windowTargets: [WindowSnap], strings: AppStrings, guided: Bool,
          captureWindow: ((CGWindowID) async throws -> CGImage)?,
          pasteboard: NSPasteboard,
+         recordCapture: ((Data) -> Void)?,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.desktop = background
         self.windowTargets = windowTargets
         self.captureWindow = captureWindow
         self.pasteboard = pasteboard
+        self.recordCapture = recordCapture
         self.strings = strings
         self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
@@ -223,6 +276,10 @@ private final class CaptureView: NSView {
         errorLabel.alignment = .center
         errorLabel.isHidden = true
         addSubview(errorLabel)
+        magnifier.isHidden = true
+        magnifier.setAccessibilityElement(false)
+        magnifier.identifier = NSUserInterfaceItemIdentifier("captureMagnifier")
+        addSubview(magnifier, positioned: .above, relativeTo: nil)
         pointerView.imageScaling = .scaleNone
         pointerView.wantsLayer = true
         pointerView.isHidden = true
@@ -260,6 +317,7 @@ private final class CaptureView: NSView {
     }
 
     func clearPointer() {
+        magnifier.isHidden = true
         if systemCursorHidden {
             CGDisplayShowCursor(CGMainDisplayID())
             systemCursorHidden = false
@@ -398,15 +456,19 @@ private final class CaptureView: NSView {
             drag = .select(point, moved: false, target: target)
             draftSelection = CGRect(origin: point, size: .zero)
         }
+        updateMagnifier(at: point)
         refresh()
     }
 
     override func mouseDragged(with event: NSEvent) {
-        updateDrag(at: mousePoint(event))
+        let point = mousePoint(event)
+        updateDrag(at: point)
+        updateMagnifier(at: point)
         refresh()
     }
 
     override func mouseUp(with event: NSEvent) {
+        magnifier.isHidden = true
         let point = mousePoint(event)
         if event.clickCount == 2, let start = doubleClickStart,
            hypot(point.x - start.x, point.y - start.y) <= 3 {
@@ -416,7 +478,7 @@ private final class CaptureView: NSView {
                 draftSelection = nil
                 if windowCaptureTask != nil {
                     copyWhenWindowReady = true
-                } else if windowImage != nil {
+                } else if windowImage != nil || target.usesDesktopImage {
                     export(.clipboard)
                 }
                 return
@@ -437,9 +499,13 @@ private final class CaptureView: NSView {
                 case .display:
                     replaceSelection(with: bounds)
                 case .window(let window):
-                    if let window, let captureWindow {
+                    if let window {
                         lastWindowClick = window
-                        selectWindow(window, using: captureWindow)
+                        if window.usesDesktopImage {
+                            replaceSelection(with: window.frame.intersection(bounds))
+                        } else if let captureWindow {
+                            selectWindow(window, using: captureWindow)
+                        }
                     }
                 }
             } else if draftSelection.width >= Selection.minimum && draftSelection.height >= Selection.minimum {
@@ -492,6 +558,24 @@ private final class CaptureView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         return CGPoint(x: min(max(point.x, bounds.minX), bounds.maxX),
                        y: min(max(point.y, bounds.minY), bounds.maxY))
+    }
+
+    private func updateMagnifier(at point: CGPoint) {
+        let sample: CGPoint
+        switch drag {
+        case .select:
+            sample = point
+        case .resize(let handle, _, _):
+            guard let selection else { magnifier.isHidden = true; return }
+            sample = handle.boundaryPoint(in: selection, near: point)
+        default:
+            magnifier.isHidden = true
+            return
+        }
+        magnifier.frame = MagnifierLayout.frame(near: point, in: bounds)
+        magnifier.source = background
+        magnifier.samplePoint = sample
+        magnifier.isHidden = false
     }
 
     private func updateDrag(at point: CGPoint) {
@@ -812,13 +896,7 @@ private final class CaptureView: NSView {
 
         switch destination {
         case .clipboard:
-            let item = NSPasteboardItem()
-            item.setData(png, forType: .png)
-            if let tiff = NSBitmapImageRep(cgImage: image).tiffRepresentation {
-                item.setData(tiff, forType: .tiff)
-            }
-            pasteboard.clearContents()
-            guard pasteboard.writeObjects([item]) else {
+            guard ClipboardImage.write(png: png, image: image, to: pasteboard) else {
                 report(strings(.clipboardError))
                 return
             }
@@ -836,6 +914,7 @@ private final class CaptureView: NSView {
                 return
             }
         }
+        recordCapture?(png)
         finish(.exported)
     }
 

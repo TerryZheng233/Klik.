@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 @MainActor
 final class ShortcutSetup: NSWindowController, NSWindowDelegate {
@@ -9,6 +10,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private let startPractice: (ShortcutSetup) -> Void
     private let save: (CaptureShortcut) throws -> Void
     private let changeLanguage: (LanguagePreference) -> Void
+    private let changeHistoryLimit: (Int) throws -> Void
     private let didClose: () -> Void
     private var step: Step
     private var selected: CaptureShortcut
@@ -16,9 +18,11 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private var recordingMonitor: Any?
     private var language: LanguagePreference
     private var strings: AppStrings
+    private var historyLimit: Int
 
     init(shortcut: CaptureShortcut, firstRun: Bool, issue: Error?,
          language: LanguagePreference, changeLanguage: @escaping (LanguagePreference) -> Void,
+         historyLimit: Int, changeHistoryLimit: @escaping (Int) throws -> Void,
          startPractice: @escaping (ShortcutSetup) -> Void,
          save: @escaping (CaptureShortcut) throws -> Void, didClose: @escaping () -> Void) {
         self.firstRun = firstRun
@@ -26,13 +30,15 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         self.startPractice = startPractice
         self.save = save
         self.changeLanguage = changeLanguage
+        self.historyLimit = historyLimit
+        self.changeHistoryLimit = changeHistoryLimit
         self.didClose = didClose
         self.step = firstRun ? .practice : .settings
         self.selected = shortcut
         self.issue = issue
         self.language = language
         self.strings = AppStrings(language: language.resolve())
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: 474),
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: 620),
                               styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -55,6 +61,44 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         NSApp.activate()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    func showSettings() {
+        stopRecording()
+        step = .settings
+        render()
+        present()
+    }
+
+    @objc private func toggleLogin(_ sender: NSSwitch) {
+        do {
+            if sender.state == .on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            issue = nil
+        } catch {
+            issue = LoginSettingError()
+        }
+        render()
+    }
+
+    @objc private func openLoginItems() {
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
+    @objc private func chooseHistoryLimit(_ sender: NSPopUpButton) {
+        let choices = KlikPreferences.historyLimits
+        guard choices.indices.contains(sender.indexOfSelectedItem) else { return }
+        do {
+            try changeHistoryLimit(choices[sender.indexOfSelectedItem])
+            historyLimit = choices[sender.indexOfSelectedItem]
+            issue = nil
+        } catch {
+            issue = HistorySettingError()
+        }
+        render()
     }
 
     // An already registered shortcut arrives through Carbon.
@@ -88,6 +132,11 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func startPracticeFromButton() { startPractice(self) }
+
+    @objc private func chooseAnotherShortcut() {
+        step = .review
+        render()
+    }
 
     @objc private func returnToSettings() {
         step = .settings
@@ -226,6 +275,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         if issue != nil {
             content.addArrangedSubview(label(strings(.practiceShortcutFallback, currentShortcut.title(using: strings)),
                                              size: 12, color: .systemRed))
+            footer.addArrangedSubview(button(strings(.chooseAnotherShortcut), #selector(chooseAnotherShortcut)))
         }
         if !firstRun { footer.addArrangedSubview(button(strings(.back), #selector(returnToSettings))) }
         footer.addArrangedSubview(button(strings(.practiceStart), #selector(startPracticeFromButton), primary: true))
@@ -239,6 +289,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: .secondaryLabelColor))
 
         if !reviewing {
+            let settingsRows = stack(.vertical, spacing: 10)
             let row = stack(.horizontal, spacing: 10)
             let words = stack(.vertical, spacing: 4)
             words.addArrangedSubview(label(strings(.language), weight: .semibold))
@@ -248,7 +299,50 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             row.addArrangedSubview(spacer)
             row.addArrangedSubview(languagePicker())
-            let card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: row)
+            settingsRows.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+
+            let loginRow = stack(.horizontal, spacing: 10)
+            loginRow.addArrangedSubview(label(strings(.loginAtStartup), weight: .semibold))
+            let loginSpacer = NSView()
+            loginSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            loginRow.addArrangedSubview(loginSpacer)
+            let login = NSSwitch()
+            login.target = self
+            login.action = #selector(toggleLogin(_:))
+            login.setAccessibilityLabel(strings(.loginAtStartup))
+            let loginStatus = SMAppService.mainApp.status
+            login.state = loginStatus == .enabled || loginStatus == .requiresApproval ? .on : .off
+            loginRow.addArrangedSubview(login)
+            settingsRows.addArrangedSubview(loginRow)
+            loginRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+            if loginStatus == .requiresApproval {
+                settingsRows.addArrangedSubview(label(strings(.loginApproval), size: 12, color: .secondaryLabelColor))
+                settingsRows.addArrangedSubview(button(strings(.openSystemSettings), #selector(openLoginItems)))
+            }
+
+            let historyRow = stack(.horizontal, spacing: 10)
+            let historyWords = stack(.vertical, spacing: 4)
+            historyWords.addArrangedSubview(label(strings(.historyLimit), weight: .semibold))
+            let historyNote = label(strings(.historyStorageNote), size: 12, color: .secondaryLabelColor)
+            historyNote.preferredMaxLayoutWidth = 280
+            historyWords.addArrangedSubview(historyNote)
+            historyWords.widthAnchor.constraint(lessThanOrEqualToConstant: 280).isActive = true
+            historyRow.addArrangedSubview(historyWords)
+            let historySpacer = NSView()
+            historySpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            historyRow.addArrangedSubview(historySpacer)
+            let picker = NSPopUpButton()
+            picker.addItems(withTitles: KlikPreferences.historyLimits.map { strings(.historyLimitCount, $0) })
+            picker.selectItem(at: KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 1)
+            picker.target = self
+            picker.action = #selector(chooseHistoryLimit(_:))
+            picker.setAccessibilityLabel(strings(.historyLimit))
+            historyRow.addArrangedSubview(picker)
+            settingsRows.addArrangedSubview(historyRow)
+            historyRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+
+            let card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: settingsRows)
             content.addArrangedSubview(card)
             card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         }
@@ -320,6 +414,14 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         }
         return button
     }
+}
+
+private struct LoginSettingError: KlikLocalizedError {
+    func message(using strings: AppStrings) -> String { strings(.loginError) }
+}
+
+private struct HistorySettingError: KlikLocalizedError {
+    func message(using strings: AppStrings) -> String { strings(.historyErrorBody) }
 }
 
 private final class SetupSurface: NSView {

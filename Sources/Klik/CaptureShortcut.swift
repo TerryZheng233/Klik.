@@ -91,6 +91,8 @@ struct KlikPreferences {
     private let defaults: UserDefaults
     private static let key = "captureShortcut"
     private static let languageKey = "interfaceLanguage"
+    private static let historyLimitKey = "historyLimit"
+    static let historyLimits = [5, 10, 20, 50]
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -109,6 +111,14 @@ struct KlikPreferences {
     }
 
     var strings: AppStrings { AppStrings(language: language.resolve()) }
+
+    var historyLimit: Int {
+        get {
+            let value = defaults.integer(forKey: Self.historyLimitKey)
+            return Self.historyLimits.contains(value) ? value : 10
+        }
+        nonmutating set { defaults.set(newValue, forKey: Self.historyLimitKey) }
+    }
 
     func save(_ shortcut: CaptureShortcut) throws {
         let data = try JSONEncoder().encode(shortcut)
