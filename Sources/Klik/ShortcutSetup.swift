@@ -20,6 +20,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private var strings: AppStrings
     private var historyLimit: Int
     private var isCheckingUpdates = false
+    private var isDownloadingUpdate = false
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }
@@ -106,7 +107,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func checkForUpdates() {
-        guard !isCheckingUpdates else { return }
+        guard !isCheckingUpdates && !isDownloadingUpdate else { return }
         isCheckingUpdates = true
         render()
         let version = appVersion
@@ -122,10 +123,10 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                 alert.messageText = self.strings(.updateCurrentTitle)
                 alert.informativeText = self.strings(.updateCurrentBody)
                 alert.addButton(withTitle: self.strings(.ok))
-            case .available(let version):
+            case .available(let version, let downloadURL):
                 alert.messageText = self.strings(.updateAvailableTitle)
-                alert.informativeText = self.strings(.updateAvailableBody, version)
-                alert.addButton(withTitle: self.strings(.openReleases))
+                alert.informativeText = self.strings(downloadURL == nil ? .updateAvailableFallbackBody : .updateAvailableBody, version)
+                alert.addButton(withTitle: self.strings(downloadURL == nil ? .openReleases : .downloadUpdate))
                 alert.addButton(withTitle: self.strings(.cancel))
             case .unavailable:
                 alert.messageText = self.strings(.updateErrorTitle)
@@ -134,9 +135,47 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                 alert.addButton(withTitle: self.strings(.openReleases))
             }
             alert.beginSheetModal(for: window) { response in
-                if (result == .unavailable && response == .alertSecondButtonReturn)
-                    || (result != .unavailable && result != .upToDate && response == .alertFirstButtonReturn) {
+                switch (result, response) {
+                case (.available(let version, let asset), .alertFirstButtonReturn):
+                    if let asset { self.installUpdate(asset, version: version) }
+                    else { NSWorkspace.shared.open(UpdateChecker.releasePage) }
+                case (.unavailable, .alertSecondButtonReturn):
                     NSWorkspace.shared.open(UpdateChecker.releasePage)
+                default: break
+                }
+            }
+        }
+    }
+
+    private func installUpdate(_ asset: UpdateChecker.Asset, version: String) {
+        guard !isDownloadingUpdate else { return }
+        isDownloadingUpdate = true
+        render()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let app = Bundle.main.bundleURL.standardizedFileURL
+                let prepared = try await Task.detached {
+                    try await UpdateInstaller.prepare(asset, version: version, app: app)
+                }.value
+                do {
+                    try UpdateInstaller.installAfterExit(prepared)
+                } catch {
+                    try? FileManager.default.removeItem(at: prepared.staged)
+                    throw error
+                }
+                NSApp.terminate(nil)
+            } catch {
+                self.isDownloadingUpdate = false
+                self.render()
+                guard let window = self.window, window.isVisible else { return }
+                let alert = NSAlert()
+                alert.messageText = self.strings(.updateDownloadErrorTitle)
+                alert.informativeText = self.strings(.updateDownloadErrorBody)
+                alert.addButton(withTitle: self.strings(.ok))
+                alert.addButton(withTitle: self.strings(.openReleases))
+                alert.beginSheetModal(for: window) { response in
+                    if response == .alertSecondButtonReturn { NSWorkspace.shared.open(UpdateChecker.releasePage) }
                 }
             }
         }
@@ -342,6 +381,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             row.addArrangedSubview(spacer)
             let languageControl = languagePicker()
             languageControl.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            languageControl.heightAnchor.constraint(equalToConstant: 26).isActive = true
             row.addArrangedSubview(languageControl)
             settingsRows.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
@@ -384,6 +424,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             picker.setAccessibilityLabel(strings(.historyLimit))
             picker.bezelColor = KlikTheme.keycap
             picker.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            picker.heightAnchor.constraint(equalToConstant: 26).isActive = true
             historyRow.addArrangedSubview(picker)
             settingsRows.addArrangedSubview(historyRow)
             historyRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
@@ -437,8 +478,8 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             versionRow.addArrangedSubview(spacer)
-            let update = button(strings(isCheckingUpdates ? .checkingUpdates : .checkForUpdates), #selector(checkForUpdates))
-            update.isEnabled = !isCheckingUpdates
+            let update = button(strings(isDownloadingUpdate ? .downloadingUpdate : (isCheckingUpdates ? .checkingUpdates : .checkForUpdates)), #selector(checkForUpdates))
+            update.isEnabled = !isCheckingUpdates && !isDownloadingUpdate
             update.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
             versionRow.addArrangedSubview(update)
             settingsRows.addArrangedSubview(versionRow)
@@ -502,14 +543,39 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     private func button(_ title: String, _ action: Selector, primary: Bool = false) -> NSButton {
-        let button = NSButton(title: title, target: self, action: action)
-        button.bezelStyle = .rounded
-        button.bezelColor = KlikTheme.keycap
+        let button = ForestButton(title: title, target: self, action: action)
         if primary {
-            button.bezelColor = KlikTheme.primary
+            button.isPrimary = true
             button.keyEquivalent = "\r"
         }
         return button
+    }
+}
+
+// Draw buttons with the same surface and outline as the settings pickers.
+private final class ForestButton: NSButton {
+    var isPrimary = false
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
+
+    override var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        return NSSize(width: max(size.width, 65), height: 26)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
+        (isPrimary ? KlikTheme.primary : KlikTheme.keycap).withAlphaComponent(isEnabled ? 1 : 0.55).setFill()
+        shape.fill()
+        (window?.firstResponder === self ? KlikTheme.selection : NSColor.separatorColor).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        style.lineBreakMode = .byTruncatingTail
+        let font = NSFont.systemFont(ofSize: 13)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: isPrimary ? NSColor.white : NSColor.labelColor, .paragraphStyle: style]
+        let height = (title as NSString).size(withAttributes: attrs).height
+        (title as NSString).draw(in: NSRect(x: 7, y: (bounds.height - height) / 2, width: max(0, bounds.width - 14), height: height + 2), withAttributes: attrs)
     }
 }
 

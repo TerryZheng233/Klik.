@@ -111,9 +111,19 @@
 "checkForUpdates" = "Check for Updates…";
 "checkingUpdates" = "Checking…";
 "updateAvailableTitle" = "An update is available";
-"updateAvailableBody" = "Klik. %@ is available. Open the release page to download it.";
+"updateAvailableBody" = "Klik. %@ is available. Klik will download the update, install it and restart.";
 "updateCurrentTitle" = "You’re up to date";
 "updateCurrentBody" = "You have the latest available version of Klik.";
 "updateErrorTitle" = "Couldn’t check for updates";
-"updateErrorBody" = "Check your internet connection and try again. The release page may require access while the repository is private.";
+"updateErrorBody" = "Check your internet connection and try again.";
 "openReleases" = "Open Release Page";
+
+"downloadUpdate" = "Update and Restart";
+"downloadingUpdate" = "Updating…";
+"updateDownloadedTitle" = "Download complete";
+"updateDownloadedBody" = "The installer is in your Downloads folder. Open it and follow the installation steps to update Klik.";
+"updateDownloadErrorTitle" = "Couldn’t install the update";
+"updateDownloadErrorBody" = "Check your internet connection and that Klik can be updated in its current location, then try again. You can also open the release page.";
+"showInFinder" = "Show in Finder";
+
+"updateAvailableFallbackBody" = "Klik. %@ is available. Open the release page to download it.";

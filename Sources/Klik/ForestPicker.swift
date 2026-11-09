@@ -18,6 +18,7 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
     required init?(coder: NSCoder) { nil }
 
     override var isFlipped: Bool { true }
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
 
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 0.5, dy: 0.5)

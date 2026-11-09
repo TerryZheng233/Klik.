@@ -111,9 +111,19 @@
 "checkForUpdates" = "检查更新…";
 "checkingUpdates" = "正在检查…";
 "updateAvailableTitle" = "有新版本可用";
-"updateAvailableBody" = "Klik. %@ 已发布，可以打开发布页面下载。";
+"updateAvailableBody" = "Klik. %@ 已发布。Klik 将下载安装更新并重新启动。";
 "updateCurrentTitle" = "已经是最新版本";
 "updateCurrentBody" = "你安装的 Klik. 已是当前可用的最新版本。";
 "updateErrorTitle" = "无法检查更新";
-"updateErrorBody" = "请检查网络后重试。仓库为私有状态时，访问发布页面可能需要权限。";
+"updateErrorBody" = "请检查网络后重试。";
 "openReleases" = "打开发布页面";
+
+"downloadUpdate" = "更新并重新启动";
+"downloadingUpdate" = "正在更新…";
+"updateDownloadedTitle" = "下载完成";
+"updateDownloadedBody" = "安装包已保存到「下载」文件夹。打开安装包并按照提示更新 Klik。";
+"updateDownloadErrorTitle" = "无法安装更新";
+"updateDownloadErrorBody" = "请检查网络，并确认 Klik 有权限更新当前位置的应用后重试。你也可以打开发布页面。";
+"showInFinder" = "在 Finder 中显示";
+
+"updateAvailableFallbackBody" = "Klik. %@ 已发布，请打开发布页面下载。";

@@ -146,10 +146,18 @@ enum UIKey: String, CaseIterable {
     case checkingUpdates
     case updateAvailableTitle
     case updateAvailableBody
+    case updateAvailableFallbackBody
     case updateCurrentTitle
     case updateCurrentBody
     case updateErrorTitle
     case updateErrorBody
+    case downloadUpdate
+    case downloadingUpdate
+    case updateDownloadedTitle
+    case updateDownloadedBody
+    case updateDownloadErrorTitle
+    case updateDownloadErrorBody
+    case showInFinder
     case openReleases
 }
 

@@ -2,6 +2,18 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.18 — 2026-11-09
+
+**English**
+
+- Download and install an available update from Settings, then restart Klik. The installer is removed after the update.
+- Give settings buttons and dropdowns a consistent appearance and alignment.
+
+**简体中文**
+
+- 在设置中发现新版本后，可直接下载安装并重启 Klik，更新后不会留下安装包。
+- 统一设置中按钮和下拉菜单的外观与对齐方式。
+
 ## 0.1.17 — 2026-11-09
 
 **English**
