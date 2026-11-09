@@ -50,8 +50,8 @@ Press **Enter** to copy your capture or **↓** to save a PNG. Klik. then asks w
 | Control | What it does |
 | --- | --- |
 | **⌥A** (default) | Start a region capture on the display under the pointer |
-| **Single click** (0.1.10+) | Select the whole display before drawing a region |
-| **Space** (0.1.11+) | Switch to window selection. Point at a window and click to select its visible frame |
+| **Click a window** (0.1.12+) | Hover to preview its boundary, then click to select it |
+| **Click the desktop** or **Shift-click** (0.1.12+) | Select the whole display |
 | **Drag an edge or corner** | Adjust the selected region |
 | **Enter** or **green ✓** | Copy the finished image to the clipboard |
 | **↓** | Save a PNG to Downloads |
@@ -73,6 +73,8 @@ open -g .build/Klik.app
 ```
 
 The private release uses ad hoc signing and has not been notarized by Apple. macOS may block a downloaded copy on first launch. A new build may also require screen recording permission again. [Apple notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+
+For local updates, the build uses the **Apple Development** identity when exactly one is available in Keychain. Set `KLIK_SIGN_IDENTITY` to select a specific identity. Keep the same signing identity across updates to retain the app’s macOS permissions.
 
 To make the same drag-to-install disk image after building the app, use [dmgbuild 1.6.7](https://pypi.org/project/dmgbuild/1.6.7/):
 

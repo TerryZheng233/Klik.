@@ -65,8 +65,8 @@
 "practiceShortcutFallback" = "%@ 暂不可用。可以先点「开始练习」，完成后再换一组快捷键。";
 "practiceReplay" = "练习截图…";
 "practicePermissionBody" = "在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」开启 Klik.。若系统提示重新打开，请照做，再回到引导继续练习。";
-"practiceSelectTitle" = "拖动框选，单击选中整块显示器";
-"practiceSelectDetail" = "按空格切换到窗口吸附。拖动选区边缘或角可以微调。";
+"practiceSelectTitle" = "单击窗口，或拖动框选";
+"practiceSelectDetail" = "单击桌面，或按住 Shift 单击任意位置，可选中整块显示器。";
 "practiceStep" = "%d / %d";
 "practiceHideTips" = "收起提示";
 "practiceRectangle" = "在选区内拖动，用矩形框出重点。";
@@ -79,6 +79,4 @@
 "practiceDownload" = "将 PNG 保存到「下载」并结束截图。";
 "practiceCancel" = "取消这次截图并回到引导。按 Esc 效果相同。";
 "practiceConfirm" = "复制到剪贴板并完成截图。按 Enter 效果相同。";
-"windowSnapShortcut" = "空格键  ·  选择窗口";
-"windowSnapActive" = "单击选中窗口  ·  再按空格返回";
-"windowSnapEmpty" = "这块显示器上没有窗口  ·  再按空格返回";
+"windowSnapHint" = "单击窗口  ·  拖动框选  ·  Shift 单击选中整块显示器";

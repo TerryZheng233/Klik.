@@ -19,9 +19,26 @@ cp -R Sources/Klik/Localization/*.lproj "$app/Contents/Resources/"
 swift make-icon.swift "$stage/Klik.iconset"
 /usr/bin/iconutil -c icns "$stage/Klik.iconset" -o "$app/Contents/Resources/Klik.icns"
 /usr/bin/xattr -cr "$app"
-/usr/bin/codesign --force --sign "${KLIK_SIGN_IDENTITY:--}" "$app"
+identity="${KLIK_SIGN_IDENTITY:-}"
+local_signing=false
+if [[ -z "$identity" ]]; then
+    identity="$(/usr/bin/security find-identity -v -p codesigning | /usr/bin/awk '/"Apple Development: / { print $2 }')"
+    if [[ "$identity" == *$'\n'* ]]; then
+        printf '%s\n' 'More than one Apple Development identity is available. Set KLIK_SIGN_IDENTITY to choose one.' >&2
+        exit 1
+    fi
+    if [[ -n "$identity" ]]; then local_signing=true; fi
+fi
+sign_options=(--force --sign "${identity:--}")
+if [[ "$local_signing" == true ]]; then sign_options+=(--timestamp=none); fi
+/usr/bin/codesign "${sign_options[@]}" "$app"
 /usr/bin/codesign --verify --strict "$app"
 if [[ -e "$destination/Klik.app" ]]; then
+    requirement="$(/usr/bin/codesign -d -r- "$destination/Klik.app" 2>&1 | /usr/bin/sed -n 's/^designated => //p')"
+    if [[ -n "$requirement" ]] && ! /usr/bin/codesign --verify -R "=$requirement" "$app"; then
+        printf '%s\n' 'The update has a different signing identity. Use the existing signing identity or build to a new destination.' >&2
+        exit 1
+    fi
     # Ditto updates the bundle at its existing path.
     /usr/bin/ditto "$app" "$destination/Klik.app"
 else

@@ -65,8 +65,8 @@
 "practiceShortcutFallback" = "%@ is unavailable. Click Start Practice, then choose a different shortcut afterward.";
 "practiceReplay" = "Practice a Capture…";
 "practicePermissionBody" = "Enable Klik. in System Settings → Privacy & Security → Screen & System Audio Recording. Reopen Klik. if asked, then return to the guide to try again.";
-"practiceSelectTitle" = "Drag to select, or click for this display";
-"practiceSelectDetail" = "Press Space to select a window. Drag a handle to adjust the selection.";
+"practiceSelectTitle" = "Click a window or drag to select";
+"practiceSelectDetail" = "Click the desktop or Shift-click anywhere to select the whole display.";
 "practiceStep" = "%d / %d";
 "practiceHideTips" = "Hide Tips";
 "practiceRectangle" = "Drag inside your selection to frame a detail.";
@@ -79,6 +79,4 @@
 "practiceDownload" = "Save a PNG to Downloads and finish the capture.";
 "practiceCancel" = "Discard this capture and return to the guide. Esc does the same.";
 "practiceConfirm" = "Copy to the clipboard and finish. Enter does the same.";
-"windowSnapShortcut" = "Space  ·  Select a window";
-"windowSnapActive" = "Click a window to select it  ·  Space to go back";
-"windowSnapEmpty" = "No windows on this display  ·  Space to go back";
+"windowSnapHint" = "Click a window  ·  Drag to select  ·  Shift-click for full display";
