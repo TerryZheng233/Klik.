@@ -42,9 +42,28 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 
 ## Install Klik.
 
-1. Open the [latest DMG](https://github.com/TerryZheng233/Klik./releases/latest) and drag **Klik.app** to **Applications**.
-2. Launch Klik. and press **⌥A**. macOS will ask for **Screen & System Audio Recording** access. After granting it, reopen Klik. if macOS asks you to.
-3. Take a practice screenshot. The guide shows you what the toolbar buttons do, then asks whether to keep **⌥A** or record your own shortcut.
+Klik. currently supports **Apple silicon Macs running macOS 14 or later**. The download does not support Intel Macs.
+
+1. Download the [latest DMG](https://github.com/TerryZheng233/Klik./releases/latest), open it, and drag **Klik.app** to **Applications**.
+2. Open Klik. If macOS says it can’t verify the app, follow the steps below to decide whether to allow it.
+3. Press **⌥A** and allow **Screen & System Audio Recording** when prompted. Reopen Klik. if macOS asks you to.
+4. The first-run guide lets you try a screenshot and keep **⌥A** or choose another shortcut.
+
+### If macOS blocks Klik.
+
+The GitHub release is ad hoc signed and **has not yet been notarized by Apple**, so macOS may say it cannot verify that Klik. is free of malware. If you downloaded Klik. from this repository, are confident it has not been altered, and decide to open it:
+
+1. Dismiss the warning, then open **System Settings → Privacy & Security**.
+2. Scroll down to **Security** and find the message that Klik.app was blocked. Click **Open Anyway**, then follow the system prompts. You may need your Mac password or Touch ID.
+3. Open Klik. again if it does not start automatically. The button may only appear after you have tried to open the app and may be available for a limited time.
+
+These steps create an exception for the app. If you don’t see the option, or your Mac is managed by a school or employer, it may not be available. If macOS says the app is damaged or will harm your computer, do not open it; check the download and see [Apple’s instructions for opening apps safely](https://support.apple.com/en-us/102445).
+
+### If screenshots don’t work
+
+- **Screen recording permission:** Open **System Settings → Privacy & Security → Screen & System Audio Recording** and allow Klik. If it isn’t listed, try starting a screenshot first. Restart Klik. if prompted. macOS may ask for this permission again after an update.
+- **Shortcut conflict:** If **⌥A** is already used by another app, choose another shortcut in Klik.’s settings. Both apps may not be able to use it at the same time.
+- **A window is missing:** Some apps restrict screen capture. On some Macs, WeChat windows may not appear even when visible on screen.
 
 ## Recent screenshots and settings
 
