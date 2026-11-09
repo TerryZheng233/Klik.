@@ -51,6 +51,7 @@ Press **Enter** to copy your capture or **↓** to save a PNG. Klik. then asks w
 | --- | --- |
 | **⌥A** (default) | Start a region capture on the display under the pointer |
 | **Single click** (0.1.10+) | Select the whole display before drawing a region |
+| **Space** (0.1.11+) | Switch to window selection. Point at a window and click to select its visible frame |
 | **Drag an edge or corner** | Adjust the selected region |
 | **Enter** or **green ✓** | Copy the finished image to the clipboard |
 | **↓** | Save a PNG to Downloads |

@@ -6,10 +6,10 @@ final class CapturePanel: NSPanel {
 
     private let canvas: CaptureView
 
-    init(frame: CGRect, image: CGImage, strings: AppStrings = AppStrings(),
+    init(frame: CGRect, image: CGImage, windowFrames: [CGRect] = [], strings: AppStrings = AppStrings(),
          guided: Bool = false, finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
-                             strings: strings, guided: guided, finish: finish)
+                             windowFrames: windowFrames, strings: strings, guided: guided, finish: finish)
         super.init(contentRect: frame, styleMask: .borderless,
                    backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -59,6 +59,10 @@ final class CapturePanel: NSPanel {
             }
 
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if key == kVK_Space, modifiers.isEmpty, !canvas.isEditingText {
+                if !event.isARepeat { canvas.toggleWindowSnap(at: mouseLocationOutsideOfEventStream) }
+                return
+            }
             if !canvas.isEditingText, modifiers == .command, event.charactersIgnoringModifiers == "z" {
                 canvas.undo()
                 return
@@ -77,6 +81,10 @@ final class CapturePanel: NSPanel {
 }
 
 private final class PointerView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+private final class CaptureHint: NSTextField {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
@@ -107,13 +115,14 @@ private final class CaptureView: NSView {
     }
 
     private enum Pointer: Equatable {
-        case crosshair, arrow, text
+        case crosshair, arrow, hand, text
         case resize(Selection.Handle)
 
         var cursor: NSCursor {
             switch self {
             case .crosshair: return .crosshair
             case .arrow: return .arrow
+            case .hand: return .pointingHand
             case .text: return .iBeam
             case .resize(let handle): return handle.cursor
             }
@@ -126,12 +135,14 @@ private final class CaptureView: NSView {
     }
 
     private let background: CaptureImage
+    private let windowFrames: [CGRect]
     private let strings: AppStrings
     private let finish: (CapturePanel.Outcome) -> Void
     private let coach: CaptureCoach?
     private var practiceSteps: [CaptureCoach.Step] = []
     private let toolbar = NSVisualEffectView()
     private let palette = NSVisualEffectView()
+    private let modeHint = CaptureHint(labelWithString: "")
     private let errorLabel = NSTextField(labelWithString: "")
     private let pointerView = PointerView()
     private let undoButton = NSButton()
@@ -142,6 +153,8 @@ private final class CaptureView: NSView {
     private var paletteButtons: [Ink: NSButton] = [:]
     private var selection: CGRect?
     private var draftSelection: CGRect?
+    private var isSnappingWindow = false
+    private var hoveredWindow: CGRect?
     private var marks: [Mark] = []
     private var preview: Mark?
     private var drag: Drag?
@@ -156,9 +169,10 @@ private final class CaptureView: NSView {
     private var pointerHotSpot = CGPoint.zero
     private var systemCursorHidden = false
 
-    init(background: CaptureImage, strings: AppStrings, guided: Bool,
+    init(background: CaptureImage, windowFrames: [CGRect], strings: AppStrings, guided: Bool,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.background = background
+        self.windowFrames = windowFrames
         self.strings = strings
         self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
@@ -168,8 +182,14 @@ private final class CaptureView: NSView {
         if let coach {
             addSubview(coach)
             coach.onChange = { [weak self] in self?.refresh() }
-            coach.showSelectionPrompt(in: bounds)
         }
+        modeHint.font = .systemFont(ofSize: 12, weight: .medium)
+        modeHint.textColor = KlikTheme.overlayInk
+        modeHint.alignment = .center
+        modeHint.wantsLayer = true
+        modeHint.layer?.cornerRadius = 9
+        modeHint.layer?.backgroundColor = KlikTheme.panelTint.cgColor
+        addSubview(modeHint)
         errorLabel.font = .systemFont(ofSize: 13, weight: .medium)
         errorLabel.textColor = .white
         errorLabel.backgroundColor = NSColor(white: 0.12, alpha: 0.96)
@@ -182,6 +202,7 @@ private final class CaptureView: NSView {
         pointerView.isHidden = true
         pointerView.setAccessibilityElement(false)
         addSubview(pointerView, positioned: .above, relativeTo: nil)
+        refresh()
     }
 
     deinit {
@@ -216,13 +237,22 @@ private final class CaptureView: NSView {
 
     func updatePointer(at windowPoint: CGPoint, force: Bool = false) {
         let point = convert(windowPoint, from: nil)
+        if isSnappingWindow {
+            let candidate = WindowSnap.target(at: point, in: windowFrames)
+            if hoveredWindow != candidate {
+                hoveredWindow = candidate
+                needsDisplay = true
+            }
+        }
         guard bounds.contains(point) else {
             clearPointer()
             return
         }
 
         let next: Pointer
-        if let textField, textField.frame.contains(point) {
+        if isSnappingWindow {
+            next = hoveredWindow == nil ? .crosshair : .hand
+        } else if let textField, textField.frame.contains(point) {
             next = .text
         } else if (!toolbar.isHidden && toolbar.frame.contains(point))
                     || (!palette.isHidden && palette.frame.contains(point))
@@ -257,10 +287,19 @@ private final class CaptureView: NSView {
         }
     }
 
+    func toggleWindowSnap(at windowPoint: CGPoint) {
+        guard drag == nil else { return }
+        isSnappingWindow.toggle()
+        hoveredWindow = nil
+        showPalette = false
+        refresh()
+        updatePointer(at: windowPoint)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         background.draw(in: context)
-        let active = draftSelection ?? selection
+        let active = isSnappingWindow ? hoveredWindow : (draftSelection ?? selection)
         context.setFillColor(NSColor.black.withAlphaComponent(0.32).cgColor)
         let mask = CGMutablePath()
         mask.addRect(bounds)
@@ -269,7 +308,7 @@ private final class CaptureView: NSView {
         context.drawPath(using: .eoFill)
 
         guard let active else { return }
-        if draftSelection == nil {
+        if !isSnappingWindow, draftSelection == nil {
             context.saveGState()
             context.clip(to: active)
             for mark in marks { mark.draw(in: context, background: background) }
@@ -280,7 +319,7 @@ private final class CaptureView: NSView {
         context.setStrokeColor(outline)
         context.setLineWidth(1.5)
         context.stroke(active)
-        if draftSelection == nil {
+        if !isSnappingWindow, draftSelection == nil {
             for handle in Selection.Handle.allCases {
                 let center = handle.center(in: active)
                 let dot = CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6)
@@ -297,7 +336,9 @@ private final class CaptureView: NSView {
         window?.makeFirstResponder(self)
         errorLabel.isHidden = true
         let point = mousePoint(event)
-        if let selection, let handle = Selection.Handle.hit(at: point, in: selection,
+        if isSnappingWindow {
+            drag = .select(point, moved: false)
+        } else if let selection, let handle = Selection.Handle.hit(at: point, in: selection,
                                                              retaining: pointer?.resizeHandle) {
             drag = .resize(handle, selection, point)
         } else if let selection, selection.contains(point) {
@@ -328,12 +369,17 @@ private final class CaptureView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard drag != nil else { return }
         updateDrag(at: mousePoint(event))
-        if case .select(_, let moved) = drag, let draftSelection {
+        if isSnappingWindow {
+            if case .select(_, false) = drag,
+               let target = WindowSnap.target(at: mousePoint(event), in: windowFrames) {
+                replaceSelection(with: target)
+                isSnappingWindow = false
+                hoveredWindow = nil
+            }
+        } else if case .select(_, let moved) = drag, let draftSelection {
             let fullDisplay = !moved && selection == nil
             if fullDisplay || (draftSelection.width >= Selection.minimum && draftSelection.height >= Selection.minimum) {
-                selection = fullDisplay ? bounds : draftSelection
-                marks.removeAll()
-                choose(nil)
+                replaceSelection(with: fullDisplay ? bounds : draftSelection)
             }
         }
         if let preview { marks.append(preview) }
@@ -342,6 +388,12 @@ private final class CaptureView: NSView {
         preview = nil
         strokePoints.removeAll(keepingCapacity: true)
         refresh()
+    }
+
+    private func replaceSelection(with rect: CGRect) {
+        selection = rect
+        marks.removeAll()
+        choose(nil)
     }
 
     private func mousePoint(_ event: NSEvent) -> CGPoint {
@@ -553,7 +605,7 @@ private final class CaptureView: NSView {
             inkButton.isHidden = !needsInk
             layoutToolbarButtons()
         }
-        if let selection, drag == nil {
+        if let selection, drag == nil, !isSnappingWindow {
             let size = toolbar.frame.size
             let x = max(5, min(selection.maxX - size.width, bounds.maxX - size.width - 5))
             let below = selection.maxY + 9
@@ -579,7 +631,7 @@ private final class CaptureView: NSView {
         }
         undoButton.isEnabled = !marks.isEmpty || isEditingText
         if let coach {
-            if drag != nil || isEditingText {
+            if drag != nil || isEditingText || isSnappingWindow {
                 coach.hide()
             } else if let selection {
                 coach.showToolbar(practiceSteps, toolbar: toolbar.frame,
@@ -589,6 +641,20 @@ private final class CaptureView: NSView {
                 coach.showSelectionPrompt(in: bounds)
             }
         }
+        updateModeHint()
+    }
+
+    private func updateModeHint() {
+        let showShortcut = selection == nil && drag == nil && coach == nil && !windowFrames.isEmpty
+        modeHint.isHidden = !isSnappingWindow && !showShortcut
+        guard !modeHint.isHidden else { return }
+        let message: UIKey = isSnappingWindow
+            ? (windowFrames.isEmpty ? .windowSnapEmpty : .windowSnapActive)
+            : .windowSnapShortcut
+        modeHint.stringValue = strings(message)
+        modeHint.sizeToFit()
+        let width = min(bounds.width - 16, modeHint.frame.width + 26)
+        modeHint.frame = CGRect(x: bounds.midX - width / 2, y: bounds.maxY - 46, width: width, height: 28)
     }
 
     @objc private func pickTool(_ sender: NSButton) {
@@ -644,7 +710,7 @@ private final class CaptureView: NSView {
     @objc private func confirm() { export(.clipboard) }
 
     func export(_ destination: Destination) {
-        guard drag == nil, let selection else { return }
+        guard drag == nil, !isSnappingWindow, let selection else { return }
         commitText()
         refresh()
         guard let image = background.render(selection: selection, marks: marks),

@@ -105,13 +105,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             defer { self.captureTask = nil }
             do {
-                let image = try await Self.snapshot(displayID: id, pointSize: frame.size, scale: scale)
+                let snapshot = try await Self.snapshot(displayID: id, pointSize: frame.size, scale: scale)
                 guard NSScreen.screens.contains(where: {
                     $0.frame == frame && $0.backingScaleFactor == scale
                         && ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
                 }) else { throw CaptureError.displayChanged }
 
-                let panel = CapturePanel(frame: frame, image: image, strings: strings, guided: practice != nil) {
+                let panel = CapturePanel(frame: frame, image: snapshot.image, windowFrames: snapshot.windows,
+                                         strings: strings, guided: practice != nil) {
                     [weak self, weak practice] outcome in
                     self?.closeCapture(restoreFocus: practice == nil)
                     practice?.returnFromPractice(outcome)
@@ -142,7 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    private static func snapshot(displayID: CGDirectDisplayID, pointSize: CGSize, scale: CGFloat) async throws -> CGImage {
+    private static func snapshot(displayID: CGDirectDisplayID, pointSize: CGSize,
+                                 scale: CGFloat) async throws -> (image: CGImage, windows: [CGRect]) {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayChanged
@@ -152,7 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         config.width = Int((pointSize.width * scale).rounded())
         config.height = Int((pointSize.height * scale).rounded())
         config.showsCursor = false
-        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        let windows = WindowSnap.visibleFrames(on: displayID, canvasSize: pointSize)
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        return (image, windows)
     }
 
     private var ownsForeground: Bool {
