@@ -9,7 +9,7 @@
   · Apple silicon · macOS 14+
 </p>
 
-![在浏览器里找咖啡馆，用 Klik. 框选地图、标出位置和营业时间（合成演示）](docs/klik-preview.png)
+![在 Safari 中用 Klik. 截取退换货说明，并圈出 30 天退货期限（合成演示）](docs/klik-preview.png)
 
 Klik. 平时在后台等候。没有主窗口、菜单栏图标或 Dock 图标。按 **⌥A** 后，屏幕略暗，鼠标变成十字。拖出的选区恢复原亮度，边角可以继续调整。
 
