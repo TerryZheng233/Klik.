@@ -27,9 +27,9 @@ A dinner plan to send to a friend: highlight the time, cover the contact details
 | Do this | What happens |
 | --- | --- |
 | **Drag** | Frame part of the screen. Pull an edge or corner to adjust the selection |
-| **Click** | Select the whole display under your pointer |
-| **Hold Space and click** | Select a single window, including the parts another window covers |
-| **Double-click** | Copy the selected area. Hold Space and double-click to copy a window |
+| **Click before selecting** | Select the whole display under your pointer |
+| **Hold Space and click** | Select a window, including the parts another window covers |
+| **Double-click** | Copy the selection when no annotation tool is active. Hold Space and double-click to copy a window |
 | **Enter** or **✓** | Copy the screenshot with your annotations |
 | **Save PNG button (↓)** | Save a PNG in Downloads |
 | **Esc** or **×** | Cancel the capture |
@@ -40,25 +40,21 @@ To capture a partly covered window, hold **Space** and point to any visible part
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 
-![A browser window partly covered by Notes on the left. The full browser window appears in the capture editor on the right.](docs/klik-window.png)
-
 ## Install Klik.
 
 1. Open the [latest DMG](https://github.com/TerryZheng233/Klik./releases/latest) and drag **Klik.app** to **Applications**.
 2. Launch Klik. and press **⌥A**. macOS will ask for **Screen & System Audio Recording** access. After granting it, reopen Klik. if macOS asks you to.
 3. Take a practice screenshot. The guide shows you what the toolbar buttons do, then asks whether to keep **⌥A** or record your own shortcut.
 
-<p align="center">
-  <img src="docs/klik-install.png" alt="Klik. disk image with Klik.app on the left and the Applications shortcut on the right" width="520">
-</p>
+## Recent screenshots and settings
 
-Click the **k.** icon in the menu bar to open settings or view recent screenshots. Klik. keeps recent captures on this Mac. Select one to preview it and copy it again, or clear the list. Settings lets you choose a limit of 5, 10, 20, or 50 screenshots and turn on opening Klik. at login. When the limit is reached, the oldest captures are removed.
+Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list when you’re done. Klik. keeps 10 by default. In settings, you can change the limit to 5, 10, 20, or 50 screenshots. When the limit is reached, the oldest captures are removed.
+
+Settings also lets you turn on opening Klik. at login.
 
 If **⌥A** is already in use, for example by WeChat, you can choose another shortcut during setup or in settings. The two apps may not be able to use the same shortcut at the same time.
 
 In settings, you can also change the shortcut or pick **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance. To run through the guide again, choose **Practice a Capture…**.
-
-![Klik.’s quick-start guide in English and light mode, alongside settings in Simplified Chinese and dark mode.](docs/klik-interface.png)
 
 ## Install with an agent
 
