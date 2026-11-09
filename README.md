@@ -60,12 +60,13 @@ In settings, you can also change the shortcut or pick **Follow System**, **Engli
 
 ## Install with an agent
 
-Attach the DMG and its SHA-256 file to a chat with an agent that can use your Mac, then paste the prompt below. If you do not have the files, provide a link to the release you want to install.
+Paste this prompt into a chat with an agent that can use your Mac and access GitHub:
 
 ```text
-Help me install the Klik. release I attached on this Mac. If I have not attached it, ask me for the release link or files.
+Help me install the latest Klik. release on this Mac from:
+https://github.com/TerryZheng233/Klik/releases/latest
 
-1. Check that my Mac has Apple silicon and runs macOS 14 or later. If the SHA-256 file is available, verify the DMG against it and stop if it does not match.
+1. Check that my Mac has Apple silicon and runs macOS 14 or later. Find the latest release and download its DMG and matching SHA-256 file. If you cannot access the release or find both files, explain what is blocking you. Verify the DMG against the checksum and stop if it does not match.
 2. Mount the DMG, copy Klik.app to /Applications, check that the installed version matches the release, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
 3. Guide me through first launch. If macOS blocks the app, show me the relevant Apple instructions and let me decide how to proceed. Leave system security settings as they are.
 4. Help me try the capture shortcut and grant screen recording access when prompted. If the shortcut is already in use, help me choose another one.
