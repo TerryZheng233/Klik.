@@ -232,6 +232,206 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
+    func testColorPickerAvailableBeforeChoosingMarkupTool() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        let trays = canvas.subviews.compactMap { $0 as? NSVisualEffectView }
+        let toolbar = try XCTUnwrap(trays.first)
+        let color = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.inkPicker, strings(.inkRed)) })
+        XCTAssertFalse(color.isHidden)
+        color.performClick(nil)
+        let palette = try XCTUnwrap(trays.first { $0 !== toolbar && $0.subviews.count == Ink.allCases.count + 1 })
+        XCTAssertFalse(palette.isHidden)
+        let blue = try XCTUnwrap(palette.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkBlue) })
+        blue.performClick(nil)
+        XCTAssertTrue(palette.isHidden)
+        XCTAssertEqual(color.toolTip, strings(.inkPicker, strings(.inkBlue)))
+        XCTAssertFalse(color.isHidden)
+    }
+
+    @MainActor
+    func testShiftConstrainedMarkupInCaptureAndOCR() async throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings,
+                                 recognizeText: { _ in "text" }) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        func event(_ type: NSEvent.EventType, _ p: CGPoint, shift: Bool = false) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: p, modifierFlags: shift ? .shift : [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 100, y: 400)))
+        canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 500, y: 50)))
+        canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 500, y: 50)))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        func button(_ key: UIKey, _ parent: NSView) throws -> NSButton {
+            try XCTUnwrap(parent.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(key) })
+        }
+        try button(.toolRectangle, toolbar).performClick(nil)
+        canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 160, y: 340)))
+        canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 230, y: 310), shift: true))
+        canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 230, y: 310), shift: true))
+        guard case .rectangle(let square, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing rectangle") }
+        XCTAssertEqual(square.width, square.height, accuracy: 0.001)
+        try button(.toolRecognizeText, toolbar).performClick(nil)
+        try await Task.sleep(for: .milliseconds(50))
+        let overlay = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
+        let image = try XCTUnwrap(overlay.subviews.compactMap { $0 as? RecognitionImageView }.first)
+        let tools = try XCTUnwrap(overlay.subviews.first { $0.identifier?.rawValue == "ocrMarkupToolbar" })
+        try button(.toolPen, tools).performClick(nil)
+        let a = image.convert(image.displayPoint(for: CGPoint(x: 300, y: 200)), to: nil)
+        let b = image.convert(image.displayPoint(for: CGPoint(x: 320, y: 240)), to: nil)
+        let c = image.convert(image.displayPoint(for: CGPoint(x: 400, y: 260)), to: nil)
+        image.mouseDown(with: try event(.leftMouseDown, a))
+        image.mouseDragged(with: try event(.leftMouseDragged, b, shift: true))
+        image.mouseUp(with: try event(.leftMouseUp, c, shift: true))
+        guard case .pen(let points, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing line") }
+        XCTAssertEqual(points.count, 2)
+        XCTAssertEqual(points[0].x, 300, accuracy: 0.01)
+        XCTAssertEqual(points[1].x, 400, accuracy: 0.01)
+        canvas.recognitionUndo()
+        XCTAssertEqual(canvas.marks.count, 1)
+        canvas.recognitionRedo()
+        XCTAssertEqual(canvas.marks.last, .pen(points, .red))
+    }
+
+    func testShiftConstraintsStayInsideSelection() {
+        let bounds = CGRect(x: 0, y: 0, width: 100, height: 80)
+        let squareEnd = MarkConstraint.squareEnd(from: CGPoint(x: 90, y: 30), toward: CGPoint(x: 40, y: 75), in: bounds)
+        XCTAssertEqual(squareEnd, CGPoint(x: 40, y: 80))
+        let arrow = MarkConstraint.snappedEnd(from: CGPoint(x: 50, y: 40), toward: CGPoint(x: 90, y: 48), in: bounds)
+        XCTAssertEqual(arrow.y, 40, accuracy: 0.001)
+        let diagonal = MarkConstraint.snappedEnd(from: CGPoint(x: 90, y: 70), toward: CGPoint(x: 100, y: 80), in: bounds)
+        XCTAssertEqual(diagonal.x, 100, accuracy: 0.001)
+        XCTAssertEqual(diagonal.y, 80, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testCoverCanBeRecoloredWithoutRedrawing() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        var outcome: CapturePanel.Outcome?
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { outcome = $0 }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolMosaic) }).performClick(nil)
+        let options = try XCTUnwrap(canvas.subviews.compactMap { $0 as? MosaicOptions }.first)
+        try XCTUnwrap(options.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.mosaicSolid) }).performClick(nil)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 250, y: 250), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 300, y: 250), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 300, y: 250), in: panel))
+        let original = try XCTUnwrap(canvas.marks.last)
+        canvas.export(.clipboard)
+        XCTAssertNil(outcome, "Pending striped cover must be colored before export")
+        XCTAssertTrue(options.isHidden)
+        canvas.updatePointer(at: CGPoint(x: 350, y: 200))
+        XCTAssertEqual(canvas.pointer, .eyedropper)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 350, y: 200), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 350, y: 200), in: panel))
+        guard case .mosaic(_, _, let style, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing cover") }
+        XCTAssertEqual(style, .manual)
+        XCTAssertFalse(options.isHidden)
+        let eyedropper = try XCTUnwrap(options.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.mosaicPickColor) })
+        XCTAssertFalse(eyedropper.isHidden)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.last, original)
+        canvas.redo()
+        guard case .mosaic(_, _, let redoneStyle, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing cover") }
+        XCTAssertEqual(redoneStyle, .manual)
+    }
+
+    @MainActor
+    func testShiftKeepsBothMosaicBrushesStraight() throws {
+        _ = NSApplication.shared
+        for mode in [MosaicStyle.pixel, .brush] {
+            let strings = AppStrings(language: .english)
+            let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                     image: try testImage(), strings: strings) { _ in }
+            defer { panel.orderOut(nil) }
+            let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+            func event(_ type: NSEvent.EventType, _ p: CGPoint, shift: Bool = false) throws -> NSEvent {
+                try XCTUnwrap(NSEvent.mouseEvent(with: type, location: p, modifierFlags: shift ? .shift : [],
+                    timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+            }
+            canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 100, y: 400)))
+            canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 500, y: 50)))
+            canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 500, y: 50)))
+            let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+            try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolMosaic) }).performClick(nil)
+            let options = try XCTUnwrap(canvas.subviews.compactMap { $0 as? MosaicOptions }.first)
+            try XCTUnwrap(options.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(mode.label) }).performClick(nil)
+            canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 180, y: 300)))
+            canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 220, y: 250), shift: true))
+            canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 280, y: 300), shift: true))
+            guard case .mosaic(let points, _, let style, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing stroke") }
+            XCTAssertEqual(style, mode)
+            XCTAssertEqual(points.count, 2)
+            XCTAssertEqual(points[0].y, points[1].y, accuracy: 0.001)
+        }
+    }
+
+    @MainActor
+    func testMosaicScrollChangesSizeOnlyOverSelection() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolMosaic) }).performClick(nil)
+        canvas.updatePointer(at: CGPoint(x: 300, y: 250))
+        let hint = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "mosaicScrollHint" })
+        XCTAssertFalse(hint.isHidden)
+        XCTAssertNil(hint.hitTest(CGPoint(x: 1, y: 1)))
+        XCTAssertGreaterThan(hint.frame.minX, 300)
+        XCTAssertTrue(canvas.adjustMosaicSize(delta: 1, precise: false, at: CGPoint(x: 300, y: 250)))
+        XCTAssertTrue(hint.isHidden)
+        XCTAssertEqual(canvas.mosaicDiameter, 34)
+        XCTAssertFalse(canvas.adjustMosaicSize(delta: 1, precise: false, at: CGPoint(x: 5, y: 5)))
+        XCTAssertTrue(canvas.adjustMosaicSize(delta: -1000, precise: true, at: CGPoint(x: 300, y: 250)))
+        XCTAssertEqual(canvas.mosaicDiameter, 10)
+        XCTAssertTrue(canvas.adjustMosaicSize(delta: 1000, precise: true, at: CGPoint(x: 300, y: 250)))
+        XCTAssertEqual(canvas.mosaicDiameter, 100)
+        let outline = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "mosaicBrushOutline" })
+        XCTAssertFalse(outline.isHidden)
+        XCTAssertEqual(outline.frame.width, 104, accuracy: 0.01)
+    }
+
+    func testScrollHintStopsAfterPracticeOrThreeDisplays() throws {
+        let suite = "KlikScrollHintTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let policy = MosaicScrollHintPolicy(defaults: defaults)
+        XCTAssertTrue(policy.shouldShow)
+        policy.didShow(); policy.didShow(); policy.didShow()
+        XCTAssertFalse(MosaicScrollHintPolicy(defaults: defaults).shouldShow)
+        defaults.removePersistentDomain(forName: suite)
+        let practiced = MosaicScrollHintPolicy(defaults: defaults)
+        practiced.didScroll()
+        XCTAssertFalse(MosaicScrollHintPolicy(defaults: defaults).shouldShow)
+    }
+
+    @MainActor
     func testUndoRedoAndNewMarkClearRedoHistory() throws {
         _ = NSApplication.shared
         let strings = AppStrings(language: .english)

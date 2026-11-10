@@ -36,6 +36,8 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(preferences.historyLimit, 10)
         preferences.historyLimit = 50
         XCTAssertEqual(KlikPreferences(defaults: defaults).historyLimit, 50)
+        preferences.historyLimit = 0
+        XCTAssertEqual(KlikPreferences(defaults: defaults).historyLimit, 0)
         defaults.set(999, forKey: "historyLimit")
         XCTAssertEqual(preferences.historyLimit, 10)
     }

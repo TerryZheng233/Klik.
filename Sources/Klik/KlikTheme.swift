@@ -29,3 +29,43 @@ enum KlikTheme {
         }
     }
 }
+
+// Shared sizing and grouping for capture and recognition toolbars.
+enum MarkupToolbarLayout {
+    static let height: CGFloat = 40
+    static let buttonWidth: CGFloat = 33
+    static let padding: CGFloat = 5
+    static let separatorWidth: CGFloat = 8
+
+    static func width(buttonCount: Int) -> CGFloat {
+        2 * padding + CGFloat(buttonCount) * buttonWidth + 3 * separatorWidth
+    }
+
+    static func arrange(buttons: [NSButton], dividers: [NSView], width: CGFloat) {
+        let positions = [Tool.allCases.count + 1, Tool.allCases.count + 3, buttons.count - 2]
+        let itemWidth = max(1, min(buttonWidth, (width - 2 * padding - 3 * separatorWidth) / CGFloat(buttons.count)))
+        var x = max(0, (width - CGFloat(buttons.count) * itemWidth - 3 * separatorWidth) / 2)
+        for (index, button) in buttons.enumerated() {
+            if let dividerIndex = positions.firstIndex(of: index) {
+                dividers[dividerIndex].frame = CGRect(x: x + 3, y: 11, width: 1, height: 18)
+                x += separatorWidth
+            }
+            button.frame = CGRect(x: x, y: 5, width: itemWidth, height: 30)
+            x += itemWidth
+        }
+    }
+
+    static func swatch(_ ink: Ink, selected: Bool = false) -> NSImage {
+        NSImage(size: NSSize(width: 23, height: 23), flipped: false) { _ in
+            let disc = NSBezierPath(ovalIn: CGRect(x: 4, y: 4, width: 15, height: 15))
+            ink.color.setFill(); disc.fill()
+            NSColor.white.withAlphaComponent(0.35).setStroke()
+            disc.lineWidth = 1; disc.stroke()
+            if selected {
+                let ring = NSBezierPath(ovalIn: CGRect(x: 1.5, y: 1.5, width: 20, height: 20))
+                NSColor.white.setStroke(); ring.lineWidth = 1.5; ring.stroke()
+            }
+            return true
+        }
+    }
+}

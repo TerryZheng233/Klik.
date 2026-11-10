@@ -3,6 +3,7 @@ import ScreenCaptureKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let preferences = KlikPreferences()
+    private let mosaicScrollHintPolicy = MosaicScrollHintPolicy(defaults: .standard)
     private let history = CaptureHistory()
     private var historyIssue = false
     private var previewURL: URL?
@@ -96,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let strings = preferences.strings
         let entries: [URL]
         do {
-            entries = Array(try history.entries().prefix(preferences.historyLimit))
+            entries = Array(try history.entries().prefix(preferences.historyLimit == 0 ? 50 : preferences.historyLimit))
         } catch {
             entries = []
             historyIssue = true
@@ -376,6 +377,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     }) else { throw CaptureError.displayChanged }
                     let windows = snapshot.windows
                     var targets = snapshot.targets
+                    // Capture the foreground app's windows while it still has focus.
+                    // Capturing after the overlay activates would render inactive selections.
+                    let foregroundIDs = targets.compactMap { target -> CGWindowID? in
+                        guard let window = windows[target.id],
+                              window.owningApplication?.processID == foregroundAtStart?.processIdentifier,
+                              foregroundAtStart?.processIdentifier != NSRunningApplication.current.processIdentifier
+                        else { return nil }
+                        return target.id
+                    }
+                    let frozenWindows = await WindowCaptureSnapshot.prepare(ids: foregroundIDs) { id in
+                        guard let window = windows[id] else { throw CaptureError.displayChanged }
+                        return try await Self.snapshot(window: window)
+                    }
                     if let popover = openPopoverFrame {
                         let visible = popover.intersection(display.frame)
                         if !visible.isNull && !visible.isEmpty {
@@ -387,9 +401,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     }
                     let panel = CapturePanel(frame: display.frame, image: snapshot.image, windowTargets: targets,
                                              strings: strings, guided: practice != nil,
+                                             scrollHintPolicy: self.mosaicScrollHintPolicy,
                                              captureWindow: { id in
-                                                 guard let window = windows[id] else { throw CaptureError.displayChanged }
-                                                 return try await Self.snapshot(window: window)
+                                                 try await frozenWindows.image(for: id) {
+                                                     guard let window = windows[id] else { throw CaptureError.displayChanged }
+                                                     return try await Self.snapshot(window: window)
+                                                 }
                                              }, recordCapture: { [weak self] png in
                                                  guard let self else { return }
                                                  do {
@@ -463,7 +480,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @MainActor
     private func switchScreenIfNeeded() {
-        guard NSEvent.pressedMouseButtons == 0, let current = overlay,
+        guard NSEvent.pressedMouseButtons == 0, let current = overlay, !current.isRecognizingText,
               let next = screenPanels.first(where: { $0.frame.contains(NSEvent.mouseLocation) }),
               next !== current else { return }
         current.orderOut(nil)

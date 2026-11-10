@@ -42,7 +42,7 @@
 "toolArrow" = "箭头";
 "toolPen" = "画笔";
 "toolText" = "文字";
-"toolMosaic" = "马赛克画刷";
+"toolMosaic" = "马赛克画刷（滚动调整粗细）";
 "toolUndo" = "撤销（⌘Z）";
 "toolRedo" = "重做（⇧⌘Z）";
 "toolDownload" = "下载 PNG";
@@ -60,7 +60,7 @@
 "textPlaceholder" = "输入文字…";
 "renderError" = "无法生成截图，请缩小选区后重试。";
 "clipboardError" = "无法写入剪贴板，请重试或点击下载。";
-"downloadError" = "无法保存到「下载」。请检查 Klik. 的文件访问权限。";
+"downloadError" = "保存失败。请检查文件夹和访问权限后重试，或先复制图片。";
 "practicePress" = "按下快捷键开始";
 "practiceStart" = "开始练习";
 "practiceShortcutFallback" = "%@ 暂不可用。可以换一组快捷键，也可以先开始练习。";
@@ -79,7 +79,7 @@
 "practiceColor" = "为矩形、箭头、画笔或文字选择颜色。";
 "practiceUndo" = "撤销上一笔标注。也可以按 ⌘Z。";
 "practiceRedo" = "恢复上一笔撤销的标注。也可以按 ⇧⌘Z。";
-"practiceDownload" = "将 PNG 保存到「下载」并结束截图。";
+"practiceDownload" = "将 PNG 保存到所选文件夹并结束截图。";
 "practiceCancel" = "取消这次截图并回到引导。按 Esc 效果相同。";
 "practiceConfirm" = "复制到剪贴板并完成截图。按 Enter 效果相同。";
 "windowSnapHint" = "按住空格  ·  选择窗口";
@@ -98,9 +98,9 @@
 "loginAtStartup" = "登录时打开 Klik.";
 "loginApproval" = "请在「系统设置 → 通用 → 登录项」中允许 Klik.。";
 "loginError" = "无法修改登录启动设置。请检查系统设置中的登录项。";
-"historyLimit" = "最近截图保留数量";
+"historyLimit" = "保留的最近截图数量";
 "historyLimitCount" = "%d 张";
-"historyStorageNote" = "保存在这台 Mac 上。达到上限后，较早的截图会被移除。";
+"historyStorageNote" = "保存在本机，达到上限时删除最早的截图。";
 
 "historyToday" = "今天";
 "historyYesterday" = "昨天";
@@ -127,3 +127,42 @@
 "showInFinder" = "在 Finder 中显示";
 
 "updateAvailableFallbackBody" = "Klik. %@ 已发布，但没有找到经过签名的安装包。请打开发布页面查看详情。";
+"toolRecognizeText" = "识别文字";
+"ocrTitle" = "识别结果";
+"ocrLoading" = "正在识别文字…";
+"ocrEmpty" = "没有识别到文字。";
+"ocrFailed" = "无法识别文字，请重试。";
+"ocrCopy" = "复制文字";
+"practiceRecognizeText" = "识别并复制选区中的文字。";
+"ocrSaveImage" = "保存图片";
+"ocrSaveImageHint" = "保存 PNG（Enter；编辑文字时按 ⌘Enter）";
+
+"ocrCancel" = "取消截图";
+"ocrConfirm" = "复制图片并完成";
+
+"saveLocation" = "保存位置";
+"chooseSaveLocation" = "选择文件夹…";
+"resetSaveLocation" = "使用「下载」";
+"saveLocationError" = "无法设置此文件夹，请重新选择。";
+
+"historyOff" = "关闭";
+"historyOffNote" = "不再保存新截图，已有历史会保留。";
+"ocrCopied" = "已复制";
+
+"mosaicPixel" = "像素马赛克";
+"mosaicBrush" = "柔和笔刷";
+"mosaicSolid" = "取色覆盖";
+
+"mosaicPickColor" = "为上一笔取色";
+
+"mosaicPickPrompt" = "点击图片选择颜色";
+
+"inkCustom" = "自定义颜色";
+"inkSample" = "从图片中取色";
+
+"ocrEditedImageChanged" = "图片已更改，请检查编辑过的文字再复制。";
+
+"ocrRefresh" = "重新识别文字";
+"ocrReplaceTitle" = "替换已编辑的文字？";
+"ocrReplaceMessage" = "重新识别会替换你编辑过的文字。";
+"ocrReplaceButton" = "替换文字";

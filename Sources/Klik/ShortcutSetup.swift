@@ -43,7 +43,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         self.issue = issue
         self.language = language
         self.strings = AppStrings(language: language.resolve())
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: firstRun ? 620 : 540),
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 544, height: firstRun ? 620 : 630),
                               styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
@@ -93,16 +93,46 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         SMAppService.openSystemSettingsLoginItems()
     }
 
-    @objc private func chooseHistoryLimit(_ sender: NSPopUpButton) {
+    @objc private func chooseHistoryLimit(_ sender: NSSlider) {
         let choices = KlikPreferences.historyLimits
-        guard choices.indices.contains(sender.indexOfSelectedItem) else { return }
+        let index = sender.integerValue
+        guard choices.indices.contains(index) else { return }
         do {
-            try changeHistoryLimit(choices[sender.indexOfSelectedItem])
-            historyLimit = choices[sender.indexOfSelectedItem]
+            try changeHistoryLimit(choices[index])
+            historyLimit = choices[index]
             issue = nil
         } catch {
             issue = HistorySettingError()
         }
+        render()
+    }
+
+    @objc private func chooseSaveLocation() {
+        guard let window else { return }
+        let location = ScreenshotLocation()
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = strings(.chooseSaveLocation)
+        panel.message = strings(.saveLocation)
+        panel.directoryURL = try? location.resolve()
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self, response == .OK, let folder = panel.url else { return }
+            do {
+                try location.select(folder)
+                self.issue = nil
+            } catch {
+                self.issue = SaveLocationSettingError()
+            }
+            self.render()
+        }
+    }
+
+    @objc private func resetSaveLocation() {
+        ScreenshotLocation().reset()
+        issue = nil
         render()
     }
 
@@ -328,10 +358,11 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
         let words = stack(.vertical, spacing: 3)
         words.addArrangedSubview(label("Klik.", size: 17, weight: .bold))
-        let stepLabel = step == .settings ? nil : (step == .practice ? "01 / 02" : "02 / 02")
-        let subtitle = strings(step == .settings ? .settingsTitle : .setupTitle)
-        words.addArrangedSubview(label([subtitle, stepLabel].compactMap { $0 }.joined(separator: "  ·  "),
-                                       size: 11, weight: .medium, color: .secondaryLabelColor))
+        if step != .settings {
+            let stepLabel = step == .practice ? "01 / 02" : "02 / 02"
+            words.addArrangedSubview(label("\(strings(.setupTitle))  ·  \(stepLabel)",
+                                           size: 11, weight: .medium, color: .secondaryLabelColor))
+        }
         row.addArrangedSubview(words)
         if step != .settings {
             let spacer = NSView()
@@ -408,7 +439,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let historyRow = stack(.horizontal, spacing: 10)
             let historyWords = stack(.vertical, spacing: 4)
             historyWords.addArrangedSubview(label(strings(.historyLimit), weight: .semibold))
-            let historyNote = label(strings(.historyStorageNote), size: 12, color: .secondaryLabelColor)
+            let historyNote = label(strings(historyLimit == 0 ? .historyOffNote : .historyStorageNote), size: 12, color: .secondaryLabelColor)
             historyNote.preferredMaxLayoutWidth = 280
             historyWords.addArrangedSubview(historyNote)
             historyWords.widthAnchor.constraint(lessThanOrEqualToConstant: 280).isActive = true
@@ -416,18 +447,60 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let historySpacer = NSView()
             historySpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             historyRow.addArrangedSubview(historySpacer)
-            let picker = ForestPicker(frame: .zero, pullsDown: false)
-            picker.addItems(withTitles: KlikPreferences.historyLimits.map { strings(.historyLimitCount, $0) })
-            picker.selectItem(at: KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 1)
-            picker.target = self
-            picker.action = #selector(chooseHistoryLimit(_:))
-            picker.setAccessibilityLabel(strings(.historyLimit))
-            picker.bezelColor = KlikTheme.keycap
-            picker.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
-            picker.heightAnchor.constraint(equalToConstant: 26).isActive = true
-            historyRow.addArrangedSubview(picker)
+            let sliderContent = stack(.vertical, spacing: 1)
+            sliderContent.alignment = .centerX
+            let slider = NSSlider(value: Double(KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 2),
+                                  minValue: 0, maxValue: Double(KlikPreferences.historyLimits.count - 1),
+                                  target: self, action: #selector(chooseHistoryLimit(_:)))
+            slider.numberOfTickMarks = KlikPreferences.historyLimits.count
+            slider.allowsTickMarkValuesOnly = true
+            slider.isContinuous = false
+            slider.setAccessibilityLabel(strings(.historyLimit))
+            slider.setAccessibilityValue(historyLimit == 0 ? strings(.historyOff) : strings(.historyLimitCount, historyLimit))
+            slider.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            sliderContent.addArrangedSubview(slider)
+            let ticks = NSView()
+            ticks.translatesAutoresizingMaskIntoConstraints = false
+            ticks.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            ticks.heightAnchor.constraint(equalToConstant: 14).isActive = true
+            for (index, limit) in KlikPreferences.historyLimits.enumerated() {
+                let tick = label(limit == 0 ? strings(.historyOff) : String(limit), size: 10, color: .secondaryLabelColor)
+                tick.alignment = .center
+                tick.frame = CGRect(x: CGFloat(index) * settingsControlWidth / 4 - 15, y: 0, width: 30, height: 14)
+                ticks.addSubview(tick)
+            }
+            sliderContent.addArrangedSubview(ticks)
+            historyRow.addArrangedSubview(sliderContent)
             settingsRows.addArrangedSubview(historyRow)
             historyRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
+
+            let locationRow = stack(.horizontal, spacing: 10)
+            let locationWords = stack(.vertical, spacing: 4)
+            locationWords.addArrangedSubview(label(strings(.saveLocation), weight: .semibold))
+            let location = ScreenshotLocation()
+            let path = (try? location.resolve().path) ?? location.lastKnownPath ?? "—"
+            let pathLabel = label(path, size: 12, color: .secondaryLabelColor)
+            pathLabel.lineBreakMode = .byTruncatingMiddle
+            pathLabel.maximumNumberOfLines = 1
+            pathLabel.toolTip = path
+            locationWords.addArrangedSubview(pathLabel)
+            locationWords.widthAnchor.constraint(lessThanOrEqualToConstant: 280).isActive = true
+            locationRow.addArrangedSubview(locationWords)
+            let locationSpacer = NSView()
+            locationSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            locationRow.addArrangedSubview(locationSpacer)
+            let locationActions = stack(.vertical, spacing: 5)
+            let choose = button(strings(.chooseSaveLocation), #selector(chooseSaveLocation))
+            choose.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+            locationActions.addArrangedSubview(choose)
+            if location.isCustom {
+                let reset = button(strings(.resetSaveLocation), #selector(resetSaveLocation))
+                reset.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
+                locationActions.addArrangedSubview(reset)
+            }
+            locationRow.addArrangedSubview(locationActions)
+            settingsRows.addArrangedSubview(locationRow)
+            locationRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
 
         }
 
@@ -662,4 +735,8 @@ private final class SetupSurface: NSView {
         super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
     }
+}
+
+private struct SaveLocationSettingError: KlikLocalizedError {
+    func message(using strings: AppStrings) -> String { strings(.saveLocationError) }
 }

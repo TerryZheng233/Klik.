@@ -42,10 +42,10 @@
 "toolArrow" = "Arrow";
 "toolPen" = "Pen";
 "toolText" = "Text";
-"toolMosaic" = "Mosaic Brush";
+"toolMosaic" = "Mosaic Brush (scroll to adjust size)";
 "toolUndo" = "Undo (⌘Z)";
 "toolRedo" = "Redo (⇧⌘Z)";
-"toolDownload" = "Save PNG to Downloads";
+"toolDownload" = "Save PNG";
 "toolCancel" = "Cancel (Esc)";
 "toolConfirm" = "Copy and Finish (Enter)";
 "inkPicker" = "Annotation Color (%@)";
@@ -59,8 +59,8 @@
 "inkBlack" = "Black";
 "textPlaceholder" = "Type something…";
 "renderError" = "Couldn’t create the image. Try a smaller selection.";
-"clipboardError" = "Couldn’t copy the image. Try again or save it to Downloads.";
-"downloadError" = "Couldn’t save to Downloads. Check Klik.’s file permissions.";
+"clipboardError" = "Couldn’t copy the image. Try again or save it.";
+"downloadError" = "Couldn’t save. Check the folder and permissions, then retry or copy the image.";
 "practicePress" = "PRESS TO START";
 "practiceStart" = "Start Practice";
 "practiceShortcutFallback" = "%@ is unavailable. Choose another shortcut, or start practice first.";
@@ -79,7 +79,7 @@
 "practiceColor" = "Pick a color for rectangles, arrows, pen strokes, or text.";
 "practiceUndo" = "Remove the last mark. You can also press ⌘Z.";
 "practiceRedo" = "Bring back the last mark you removed. You can also press ⇧⌘Z.";
-"practiceDownload" = "Save a PNG to Downloads and finish the capture.";
+"practiceDownload" = "Save a PNG to the selected folder and finish the capture.";
 "practiceCancel" = "Discard this capture and return to the guide. Esc does the same.";
 "practiceConfirm" = "Copy to the clipboard and finish. Enter does the same.";
 "windowSnapHint" = "Hold Space  ·  Select a window";
@@ -98,9 +98,9 @@
 "loginAtStartup" = "Open Klik. at login";
 "loginApproval" = "Allow Klik. in System Settings → General → Login Items.";
 "loginError" = "Couldn’t change the login setting. Check Login Items in System Settings.";
-"historyLimit" = "Keep recent screenshots";
+"historyLimit" = "Number of recent screenshots kept";
 "historyLimitCount" = "%d screenshots";
-"historyStorageNote" = "Stored on this Mac. When the limit is reached, the oldest screenshots are removed.";
+"historyStorageNote" = "Stored locally, oldest removed when limit is reached.";
 
 "historyToday" = "Today";
 "historyYesterday" = "Yesterday";
@@ -127,3 +127,42 @@
 "showInFinder" = "Show in Finder";
 
 "updateAvailableFallbackBody" = "Klik. %@ is available, but a signed installer could not be found. Open the release page for details.";
+"toolRecognizeText" = "Recognize Text";
+"ocrTitle" = "Recognized Text";
+"ocrLoading" = "Recognizing text…";
+"ocrEmpty" = "No text found.";
+"ocrFailed" = "Couldn’t recognize text. Try again.";
+"ocrCopy" = "Copy Text";
+"practiceRecognizeText" = "Recognize and copy text from the selection.";
+"ocrSaveImage" = "Save Image";
+"ocrSaveImageHint" = "Save PNG (Enter; ⌘Enter while editing text)";
+
+"ocrCancel" = "Cancel Capture";
+"ocrConfirm" = "Copy Image and Finish";
+
+"saveLocation" = "Save location";
+"chooseSaveLocation" = "Choose Folder…";
+"resetSaveLocation" = "Use Downloads";
+"saveLocationError" = "Couldn’t set this folder. Please choose it again.";
+
+"historyOff" = "Off";
+"historyOffNote" = "New screenshots won’t be kept. Existing history is retained.";
+"ocrCopied" = "Copied";
+
+"mosaicPixel" = "Pixelate";
+"mosaicBrush" = "Soft brush";
+"mosaicSolid" = "Color cover";
+
+"mosaicPickColor" = "Pick a color for the last stroke";
+
+"mosaicPickPrompt" = "Click the image to pick a color";
+
+"inkCustom" = "Custom color";
+"inkSample" = "Pick color from image";
+
+"ocrEditedImageChanged" = "Image changed. Review edited text before copying.";
+
+"ocrRefresh" = "Recognize Text Again";
+"ocrReplaceTitle" = "Replace edited text?";
+"ocrReplaceMessage" = "Recognizing again will replace the text you edited.";
+"ocrReplaceButton" = "Replace Text";

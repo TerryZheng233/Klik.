@@ -92,7 +92,7 @@ struct KlikPreferences {
     private static let key = "captureShortcut"
     private static let languageKey = "interfaceLanguage"
     private static let historyLimitKey = "historyLimit"
-    static let historyLimits = [5, 10, 20, 50]
+    static let historyLimits = [0, 5, 10, 20, 50]
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -114,6 +114,7 @@ struct KlikPreferences {
 
     var historyLimit: Int {
         get {
+            guard defaults.object(forKey: Self.historyLimitKey) != nil else { return 10 }
             let value = defaults.integer(forKey: Self.historyLimitKey)
             return Self.historyLimits.contains(value) ? value : 10
         }

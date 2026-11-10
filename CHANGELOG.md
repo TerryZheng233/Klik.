@@ -2,6 +2,24 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.20 — 2026-11-10
+
+**English**
+
+- Recognize text locally and edit or copy the results beside the capture, while continuing to annotate the image. Refresh recognition with confirmation before replacing edited text.
+- Add pixelated, soft-brush, and manually color-picked cover modes; adjust brush size with the scroll wheel. Hold Shift for straight brush strokes, square rectangles, and snapped arrows.
+- Pick annotation colors from the capture with a live color preview, including previously completed marks.
+- Choose the default save folder, turn off new screenshot history, and receive clearer save feedback.
+- Improve capture focus, OCR interaction, toolbar consistency, pointer feedback, and settings layout.
+
+**简体中文**
+
+- 在本机识别文字，在截图旁编辑或复制识别结果，同时继续标注图片。重新识别前会确认是否替换编辑过的文字。
+- 增加像素、柔和笔刷和手动取色覆盖模式，可用滚轮调整粗细；按住 Shift 可以画直线、正方形和角度吸附的箭头。
+- 从截图和已完成的标注中选取标注颜色，并实时预览取色结果。
+- 支持选择默认保存位置、关闭新截图历史，并改进保存反馈。
+- 改进截图焦点、OCR 交互、工具栏一致性、光标反馈与设置布局。
+
 ## 0.1.19 — 2026-11-09
 
 **English**

@@ -30,6 +30,19 @@ final class CaptureHistoryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
     }
 
+    func testDisabledHistoryDoesNotRecordOrEraseExistingImages() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let history = CaptureHistory(directory: directory)
+        try history.record(Data([1]))
+        history.limit = 0
+        try history.enforceLimit()
+        try history.record(Data([2]))
+        let files = try history.entries()
+        XCTAssertEqual(files.count, 1)
+        XCTAssertEqual(try Data(contentsOf: XCTUnwrap(files.first)), Data([1]))
+    }
+
     func testHistoryDatesUseTodayYesterdayAndOlderDate() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!

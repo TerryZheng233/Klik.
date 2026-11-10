@@ -21,6 +21,7 @@ final class CaptureHistory {
     }
 
     func record(_ png: Data) throws {
+        guard limit > 0 else { return }
         try files.createDirectory(at: directory, withIntermediateDirectories: true,
                                   attributes: [.posixPermissions: 0o700])
         let timestamp = Int64(Date().timeIntervalSince1970 * 1_000_000)
@@ -32,6 +33,7 @@ final class CaptureHistory {
     }
 
     func enforceLimit() throws {
+        guard limit > 0 else { return }
         for old in try entries().dropFirst(limit) {
             try files.removeItem(at: old)
         }

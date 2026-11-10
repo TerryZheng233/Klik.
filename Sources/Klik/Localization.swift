@@ -57,6 +57,7 @@ enum UIKey: String, CaseIterable {
     case practicePen
     case practiceText
     case practiceMosaic
+    case practiceRecognizeText
     case practiceColor
     case practiceUndo
     case practiceRedo
@@ -74,6 +75,10 @@ enum UIKey: String, CaseIterable {
     case shortcutPrompt
     case shortcutIntro
     case settingsIntro
+    case saveLocation
+    case chooseSaveLocation
+    case resetSaveLocation
+    case saveLocationError
     case recording
     case recordingHint
     case reopenHint
@@ -104,12 +109,34 @@ enum UIKey: String, CaseIterable {
     case toolPen
     case toolText
     case toolMosaic
+    case mosaicPixel
+    case mosaicBrush
+    case mosaicSolid
+    case mosaicPickColor
+    case mosaicPickPrompt
+    case toolRecognizeText
+    case ocrTitle
+    case ocrLoading
+    case ocrEditedImageChanged
+    case ocrRefresh
+    case ocrReplaceTitle
+    case ocrReplaceMessage
+    case ocrReplaceButton
+    case ocrEmpty
+    case ocrFailed
+    case ocrCopy
+    case ocrCancel
+    case ocrConfirm
+    case ocrSaveImage
+    case ocrSaveImageHint
     case toolUndo
     case toolRedo
     case toolDownload
     case toolCancel
     case toolConfirm
     case inkPicker
+    case inkCustom
+    case inkSample
     case inkRed
     case inkOrange
     case inkYellow
@@ -140,6 +167,9 @@ enum UIKey: String, CaseIterable {
     case loginError
     case historyLimit
     case historyLimitCount
+    case historyOff
+    case historyOffNote
+    case ocrCopied
     case historyStorageNote
     case appVersion
     case checkForUpdates

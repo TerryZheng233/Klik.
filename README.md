@@ -16,7 +16,7 @@ Whether you’re reading a paper, browsing a website, or playing a game, press *
 
 I like how easy it is to take a screenshot in WeChat. But by default, confirming a screenshot brings the WeChat window back to the front, even when I’m in the middle of reading or playing a game. Mac screenshots are saved to the desktop by default, so I kept collecting files when all I wanted was to paste a screenshot.
 
-I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. Drag boxes, arrows, text, and pen marks to reposition them. Adjust a box using its handles, or drag an arrow’s endpoints to change its length and direction. When adding text, press Enter once to finish editing and again to copy. If I want a file, I can save a PNG to Downloads.
+I wanted a small tool I could use without losing my place. Klik. stays in the background until I need it. Before copying a screenshot, I can draw a box or arrow, add a note, or pixelate part of it. Drag boxes, arrows, text, and pen marks to reposition them. Adjust a box using its handles, or drag an arrow’s endpoints to change its length and direction. The mosaic tool offers pixelation, a soft brush, and a cover with a color picked from the image; scroll over the capture to adjust brush size. Hold Shift while drawing to make straight pen or mosaic strokes, a square, or snap an arrow to 45-degree angles. When adding text, press Enter once to finish editing and again to copy. If I want a file, I can save a PNG to Downloads or choose another folder in Settings.
 
 ![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
@@ -31,12 +31,15 @@ A dinner plan to send to a friend: highlight the time, cover the contact details
 | **Hold Space and click** | Select a window, including the parts another window covers |
 | **Double-click** | Copy the selection when no annotation tool is active. Hold Space and double-click to copy a window |
 | **Enter** or **✓** | Copy the screenshot with your annotations |
-| **Save PNG button (↓)** | Save a PNG in Downloads |
+| **Save PNG button (↓)** | Save a PNG in the selected folder (Downloads by default) |
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
 | **⇧⌘Z** | Redo an annotation you just undid |
+| **Recognize Text** | Recognize text on this Mac, then review or edit it before copying |
 
 To capture a partly covered window, hold **Space** and point to any visible part of it. Click to bring the full window into the selection. A magnifier appears while you drag or adjust a selection, helping you line up its edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
+
+Text recognition uses the current selection with its annotations, including mosaic. Continue annotating the image using the toolbar alongside the results; adding or undoing mosaic refreshes unedited results. Edited text is kept with a warning when the image changes; the refresh button asks before replacing it. The copy button copies the recognized text and keeps the editor open, while the toolbar download button or Enter saves the capture to the selected folder (Downloads by default). While editing recognized text, Enter inserts a new line and ⌘Enter saves the capture. Check the results, especially formulas, tables and complex layouts.
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 
@@ -67,7 +70,7 @@ These steps create an exception for the app. If you don’t see the option, or y
 
 ## Recent screenshots and settings
 
-Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can change the limit to 5, 10, 20, or 50 screenshots. When the limit is reached, the oldest captures are removed.
+Click **k.** in the menu bar to find your recent screenshots. They’re stored on your Mac; select one to preview it and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
 
 Settings also lets you turn on opening Klik. at login and check for updates. When a new version is available, you can install it directly from Settings and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing.
 

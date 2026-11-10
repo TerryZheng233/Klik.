@@ -112,6 +112,64 @@ final class CaptureTests: XCTestCase {
         XCTAssertNotEqual(try rgba(result, x: 90, y: 124), try rgba(result, x: 91, y: 124))
     }
 
+    func testMosaicStrokeRetainsItsOwnDiameter() throws {
+        let source = try makeImage(width: 224, height: 224) { context in
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 224, height: 224))
+            context.setFillColor(CGColor(gray: 1, alpha: 1))
+            for x in stride(from: 0, to: 224, by: 2) {
+                context.fill(CGRect(x: x, y: 0, width: 1, height: 224))
+            }
+        }
+        let background = CaptureImage(image: source, size: CGSize(width: 112, height: 112))
+        let area = CGRect(x: 0, y: 0, width: 112, height: 112)
+        let small = Mark.mosaic([CGPoint(x: 56, y: 56)], diameter: 12)
+        let large = Mark.mosaic([CGPoint(x: 56, y: 56)], diameter: 50)
+        let smallImage = try XCTUnwrap(background.render(selection: area, marks: [small]))
+        let largeImage = try XCTUnwrap(background.render(selection: area, marks: [large]))
+        XCTAssertNotEqual(try rgba(smallImage, x: 144, y: 112), try rgba(smallImage, x: 145, y: 112))
+        XCTAssertEqual(try rgba(largeImage, x: 144, y: 112), try rgba(largeImage, x: 145, y: 112))
+        XCTAssertNotEqual(small, large)
+    }
+
+    func testSoftAndPickedColorMosaicAreFlattenedIntoOutput() throws {
+        let source = try makeImage(width: 200, height: 200) { context in
+            context.setFillColor(CGColor(red: 0.8, green: 0.6, blue: 0.4, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 200, height: 200))
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fill(CGRect(x: 90, y: 90, width: 20, height: 20))
+        }
+        let background = CaptureImage(image: source, size: CGSize(width: 100, height: 100))
+        let center = CGPoint(x: 50, y: 50)
+        let sampled = try XCTUnwrap(background.color(at: CGPoint(x: 2.5, y: 2.5)))
+        let expected = try rgba(source, x: 5, y: 5)
+        XCTAssertEqual(sampled.red, CGFloat(expected[0]) / 255, accuracy: 0.01)
+        XCTAssertEqual(sampled.green, CGFloat(expected[1]) / 255, accuracy: 0.01)
+        XCTAssertEqual(sampled.blue, CGFloat(expected[2]) / 255, accuracy: 0.01)
+        let selection = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let solid = try XCTUnwrap(background.render(selection: selection,
+            marks: [.mosaic([center], diameter: 30, style: .manual, color: sampled)]))
+        let pixel = try rgba(solid, x: 100, y: 100)
+        XCTAssertGreaterThan(pixel[0], 180)
+        XCTAssertGreaterThan(pixel[1], 120)
+        let brush = try XCTUnwrap(background.render(selection: selection,
+            marks: [.mosaic([center], diameter: 30, style: .brush)]))
+        XCTAssertNotEqual(try rgba(brush, x: 100, y: 100), try rgba(source, x: 100, y: 100))
+    }
+
+    func testPendingCoverUsesOpaqueDiagonalStripes() throws {
+        let source = try makeImage(width: 100, height: 100) { context in
+            context.setFillColor(CGColor(gray: 0.5, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        }
+        let background = CaptureImage(image: source, size: CGSize(width: 100, height: 100))
+        let result = try XCTUnwrap(background.render(selection: CGRect(x: 0, y: 0, width: 100, height: 100),
+            marks: [.mosaic([CGPoint(x: 50, y: 50)], diameter: 50, style: .solid)]))
+        let values = try (40...60).map { try rgba(result, x: $0, y: 50)[0] }
+        XCTAssertLessThan(try XCTUnwrap(values.min()), 50)
+        XCTAssertGreaterThan(try XCTUnwrap(values.max()), 200)
+    }
+
     func testAllEightHandlesResizeFromTheirEdge() {
         let bounds = CGRect(x: 0, y: 0, width: 100, height: 100)
         let selection = CGRect(x: 30, y: 30, width: 40, height: 40)
@@ -160,6 +218,32 @@ final class CaptureTests: XCTestCase {
         XCTAssertNil(Selection.Handle.hit(at: CGPoint(x: 40, y: 21), in: selection, retaining: .top))
     }
 
+    func testEyedropperMatchesRenderedPixelsAtRetinaCoordinates() throws {
+        let source = try makeImage(width: 160, height: 120) { context in
+            context.setFillColor(CGColor(red: 0.8, green: 0.2, blue: 0.1, alpha: 1))
+            context.fill(CGRect(x: 0, y: 60, width: 160, height: 60))
+            context.setFillColor(CGColor(red: 0.1, green: 0.3, blue: 0.8, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 60))
+        }
+        let background = CaptureImage(image: source, size: CGSize(width: 80, height: 60), origin: CGPoint(x: 20, y: 30))
+        let selection = CGRect(x: 25, y: 35, width: 65, height: 50)
+        let marks: [Mark] = [.pen([CGPoint(x: 35, y: 45), CGPoint(x: 50, y: 45)], .green)]
+        for point in [CGPoint(x: 60, y: 45), CGPoint(x: 60, y: 75), CGPoint(x: 40, y: 45)] {
+            let sampled = try XCTUnwrap(background.visibleColor(at: point, selection: selection, marks: marks))
+            let result = try XCTUnwrap(background.render(selection: selection, marks: marks))
+            let pixel = try rgba(result, x: Int((point.x - selection.minX) * 2), y: Int((point.y - selection.minY) * 2))
+            XCTAssertEqual(sampled.red, CGFloat(pixel[0]) / 255, accuracy: 0.01)
+            XCTAssertEqual(sampled.green, CGFloat(pixel[1]) / 255, accuracy: 0.01)
+            XCTAssertEqual(sampled.blue, CGFloat(pixel[2]) / 255, accuracy: 0.01)
+            let cover = Mark.mosaic([CGPoint(x: 75, y: 55)], diameter: 12, style: .manual, color: sampled)
+            let painted = try XCTUnwrap(background.render(selection: selection, marks: marks + [cover]))
+            let paintedPixel = try rgba(painted, x: 100, y: 40)
+            for channel in 0..<3 {
+                XCTAssertEqual(Int(paintedPixel[channel]), Int(pixel[channel]), accuracy: 2)
+            }
+        }
+    }
+
     private func makeImage(width: Int, height: Int, draw: (CGContext) -> Void) throws -> CGImage {
         let context = try bitmap(width: width, height: height)
         draw(context)
@@ -186,4 +270,8 @@ final class CaptureTests: XCTestCase {
         XCTAssertGreaterThan(pixel[0], 200, line: line)
         XCTAssertLessThan(pixel[1], 125, line: line)
     }
+
+
+
+
 }
