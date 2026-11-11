@@ -69,6 +69,20 @@ Klik. currently supports **Apple silicon Macs running macOS 14 or later**. The d
 3. The first-run guide will appear. Press **⌥A** or click **Start Practice**. When prompted, allow **Screen & System Audio Recording**; if macOS asks you to reopen Klik., do so and return to the guide.
 4. Follow the guide to select and copy a screenshot, then keep **⌥A** or choose another shortcut. After setup, you can press your shortcut, drag to select an area, press **Enter** to copy, and paste with **⌘V**.
 
+### Install with an agent
+
+Paste this prompt into a chat with an agent that can use your Mac and access GitHub:
+
+```text
+Help me install the latest Klik. release on this Mac from:
+https://github.com/TerryZheng233/Klik./releases/latest
+
+1. Check that my Mac has Apple silicon and runs macOS 14 or later. Find the latest release and download its DMG and matching SHA-256 file. If you cannot access the release or find both files, explain what is blocking you. Verify the DMG against the checksum and stop if it does not match.
+2. Mount the DMG, copy Klik.app to /Applications, check that the installed version matches the release, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
+3. Guide me through first launch. If macOS blocks the app, show me the relevant Apple instructions and let me decide how to proceed. Leave system security settings as they are.
+4. Help me try the capture shortcut and grant screen recording access when prompted. If the shortcut is already in use, help me choose another one.
+```
+
 ### If macOS blocks Klik.
 
 The GitHub release is ad hoc signed and **has not yet been notarized by Apple**, so macOS may say it cannot verify that Klik. is free of malware. If you downloaded Klik. from this repository, are confident it has not been altered, and decide to open it:
@@ -96,20 +110,6 @@ You can also change your shortcut in settings, or choose **Follow System**, **En
 ![Illustration of Klik. settings in English light mode and Simplified Chinese dark mode.](docs/klik-interface.png)
 
 *Illustration of the settings in both languages; some controls have since changed.*
-
-## Install with an agent
-
-Paste this prompt into a chat with an agent that can use your Mac and access GitHub:
-
-```text
-Help me install the latest Klik. release on this Mac from:
-https://github.com/TerryZheng233/Klik./releases/latest
-
-1. Check that my Mac has Apple silicon and runs macOS 14 or later. Find the latest release and download its DMG and matching SHA-256 file. If you cannot access the release or find both files, explain what is blocking you. Verify the DMG against the checksum and stop if it does not match.
-2. Mount the DMG, copy Klik.app to /Applications, check that the installed version matches the release, and eject the DMG. If Klik.app is already installed, ask me before replacing it.
-3. Guide me through first launch. If macOS blocks the app, show me the relevant Apple instructions and let me decide how to proceed. Leave system security settings as they are.
-4. Help me try the capture shortcut and grant screen recording access when prompted. If the shortcut is already in use, help me choose another one.
-```
 
 ## Build from source
 
