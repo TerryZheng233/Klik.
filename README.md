@@ -10,7 +10,7 @@
   Apple silicon · macOS 14+
 </p>
 
-Press **⌥A** or a shortcut of your choice, select an area, and press **Enter** to copy a screenshot. Add annotations or recognize text when you need them, then get back to what you were doing.
+Press **⌥A** or a shortcut of your choice, select an area, and press **Enter** to copy a screenshot. For a quick capture without edits, simply double-click the selection. Add annotations or recognize text when you need them, then get back to what you were doing.
 
 ![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
