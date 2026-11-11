@@ -47,6 +47,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                               styleMask: [.titled, .closable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
+        window.backgroundColor = KlikTheme.window
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
@@ -111,6 +112,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         guard let window else { return }
         let location = ScreenshotLocation()
         let panel = NSOpenPanel()
+        panel.appearance = window.effectiveAppearance
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
@@ -164,6 +166,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                 alert.addButton(withTitle: self.strings(.ok))
                 alert.addButton(withTitle: self.strings(.openReleases))
             }
+            KlikTheme.styleAlert(alert, in: window)
             alert.beginSheetModal(for: window) { response in
                 switch (result, response) {
                 case (.available(let version, let asset), .alertFirstButtonReturn):
@@ -204,6 +207,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                 alert.informativeText = self.strings(.updateDownloadErrorBody)
                 alert.addButton(withTitle: self.strings(.ok))
                 alert.addButton(withTitle: self.strings(.openReleases))
+                KlikTheme.styleAlert(alert, in: window)
                 alert.beginSheetModal(for: window) { response in
                     if response == .alertSecondButtonReturn { NSWorkspace.shared.open(UpdateChecker.releasePage) }
                 }
@@ -361,7 +365,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         if step != .settings {
             let stepLabel = step == .practice ? "01 / 02" : "02 / 02"
             words.addArrangedSubview(label("\(strings(.setupTitle))  ·  \(stepLabel)",
-                                           size: 11, weight: .medium, color: .secondaryLabelColor))
+                                           size: 11, weight: .medium, color: KlikTheme.mutedInk))
         }
         row.addArrangedSubview(words)
         if step != .settings {
@@ -375,17 +379,17 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
     private func addGuide(to content: NSStackView, footer: NSStackView) {
         content.addArrangedSubview(label(strings(.guideTitle), size: 30, weight: .bold))
-        content.addArrangedSubview(label(strings(.guideIntro), color: .secondaryLabelColor))
+        content.addArrangedSubview(label(strings(.guideIntro), color: KlikTheme.mutedInk))
         let keys = stack(.vertical, spacing: 6)
-        keys.addArrangedSubview(label(strings(.practicePress), size: 12, weight: .semibold, color: .secondaryLabelColor))
+        keys.addArrangedSubview(label(strings(.practicePress), size: 12, weight: .semibold, color: KlikTheme.mutedInk))
         keys.addArrangedSubview(label(currentShortcut.title(using: strings), size: 42, weight: .bold))
-        let card = SetupSurface(color: KlikTheme.keycap, cornerRadius: 15, content: keys, inset: 18)
+        let card = SetupSurface(color: KlikTheme.keycap, cornerRadius: KlikTheme.cornerRadius, content: keys, inset: 18)
         content.addArrangedSubview(card)
         card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        content.addArrangedSubview(label(strings(.guidePermission), size: 12, color: .secondaryLabelColor))
+        content.addArrangedSubview(label(strings(.guidePermission), size: 12, color: KlikTheme.mutedInk))
         if issue != nil {
             content.addArrangedSubview(label(strings(.practiceShortcutFallback, currentShortcut.title(using: strings)),
-                                             size: 12, color: .systemRed))
+                                             size: 12, color: KlikTheme.danger))
             footer.addArrangedSubview(button(strings(.chooseAnotherShortcut), #selector(chooseAnotherShortcut)))
         }
         if !firstRun { footer.addArrangedSubview(button(strings(.back), #selector(returnToSettings))) }
@@ -397,7 +401,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         let reviewing = step == .review
         let title = reviewing ? strings(.shortcutPrompt) : strings(.settingsTitle)
         content.addArrangedSubview(label(title, size: 30, weight: .bold))
-        content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: .secondaryLabelColor))
+        content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: KlikTheme.mutedInk))
 
         let settingsRows = stack(.vertical, spacing: 10)
         let settingsControlWidth: CGFloat = 146
@@ -405,7 +409,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             let row = stack(.horizontal, spacing: 10)
             let words = stack(.vertical, spacing: 4)
             words.addArrangedSubview(label(strings(.language), weight: .semibold))
-            words.addArrangedSubview(label(strings(.interfaceLanguage), size: 12, color: .secondaryLabelColor))
+            words.addArrangedSubview(label(strings(.interfaceLanguage), size: 12, color: KlikTheme.mutedInk))
             row.addArrangedSubview(words)
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -432,14 +436,14 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             settingsRows.addArrangedSubview(loginRow)
             loginRow.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
             if loginStatus == .requiresApproval {
-                settingsRows.addArrangedSubview(label(strings(.loginApproval), size: 12, color: .secondaryLabelColor))
+                settingsRows.addArrangedSubview(label(strings(.loginApproval), size: 12, color: KlikTheme.mutedInk))
                 settingsRows.addArrangedSubview(button(strings(.openSystemSettings), #selector(openLoginItems)))
             }
 
             let historyRow = stack(.horizontal, spacing: 10)
             let historyWords = stack(.vertical, spacing: 4)
             historyWords.addArrangedSubview(label(strings(.historyLimit), weight: .semibold))
-            let historyNote = label(strings(historyLimit == 0 ? .historyOffNote : .historyStorageNote), size: 12, color: .secondaryLabelColor)
+            let historyNote = label(strings(historyLimit == 0 ? .historyOffNote : .historyStorageNote), size: 12, color: KlikTheme.mutedInk)
             historyNote.preferredMaxLayoutWidth = 280
             historyWords.addArrangedSubview(historyNote)
             historyWords.widthAnchor.constraint(lessThanOrEqualToConstant: 280).isActive = true
@@ -449,9 +453,13 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             historyRow.addArrangedSubview(historySpacer)
             let sliderContent = stack(.vertical, spacing: 1)
             sliderContent.alignment = .centerX
-            let slider = NSSlider(value: Double(KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 2),
-                                  minValue: 0, maxValue: Double(KlikPreferences.historyLimits.count - 1),
-                                  target: self, action: #selector(chooseHistoryLimit(_:)))
+            let slider = NSSlider()
+            slider.cell = ForestSliderCell()
+            slider.minValue = 0
+            slider.maxValue = Double(KlikPreferences.historyLimits.count - 1)
+            slider.doubleValue = Double(KlikPreferences.historyLimits.firstIndex(of: historyLimit) ?? 2)
+            slider.target = self
+            slider.action = #selector(chooseHistoryLimit(_:))
             slider.numberOfTickMarks = KlikPreferences.historyLimits.count
             slider.allowsTickMarkValuesOnly = true
             slider.isContinuous = false
@@ -464,7 +472,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             ticks.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
             ticks.heightAnchor.constraint(equalToConstant: 14).isActive = true
             for (index, limit) in KlikPreferences.historyLimits.enumerated() {
-                let tick = label(limit == 0 ? strings(.historyOff) : String(limit), size: 10, color: .secondaryLabelColor)
+                let tick = label(limit == 0 ? strings(.historyOff) : String(limit), size: 10, color: KlikTheme.mutedInk)
                 tick.alignment = .center
                 tick.frame = CGRect(x: CGFloat(index) * settingsControlWidth / 4 - 15, y: 0, width: 30, height: 14)
                 ticks.addSubview(tick)
@@ -479,7 +487,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             locationWords.addArrangedSubview(label(strings(.saveLocation), weight: .semibold))
             let location = ScreenshotLocation()
             let path = (try? location.resolve().path) ?? location.lastKnownPath ?? "—"
-            let pathLabel = label(path, size: 12, color: .secondaryLabelColor)
+            let pathLabel = label(path, size: 12, color: KlikTheme.mutedInk)
             pathLabel.lineBreakMode = .byTruncatingMiddle
             pathLabel.maximumNumberOfLines = 1
             pathLabel.toolTip = path
@@ -506,7 +514,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
         let keys = stack(.vertical, spacing: 5)
         keys.addArrangedSubview(label(strings(.shortcut), size: reviewing ? 11 : 14, weight: .semibold,
-                                     color: reviewing ? .secondaryLabelColor : .labelColor))
+                                     color: reviewing ? KlikTheme.mutedInk : KlikTheme.ink))
         let value = recording ? strings(.recording) : selected.title(using: strings)
         keys.addArrangedSubview(label(value, size: reviewing ? (recording ? 23 : 30) : 16, weight: .semibold))
         let keyContent: NSView
@@ -536,17 +544,17 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         }
         let card: SetupSurface
         if reviewing {
-            card = SetupSurface(color: KlikTheme.keycap, cornerRadius: 14, content: keyContent)
+            card = SetupSurface(color: KlikTheme.keycap, cornerRadius: KlikTheme.cornerRadius, content: keyContent)
         } else {
             settingsRows.addArrangedSubview(keyContent)
             keyContent.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
-            card = SetupSurface(color: KlikTheme.card, cornerRadius: 14, outlined: true, content: settingsRows)
+            card = SetupSurface(color: KlikTheme.card, cornerRadius: KlikTheme.cornerRadius, outlined: true, content: settingsRows)
         }
         if !reviewing {
             let versionRow = stack(.horizontal, spacing: 10)
             let versionWords = stack(.vertical, spacing: 5)
             versionWords.addArrangedSubview(label(strings(.appVersion), weight: .semibold))
-            versionWords.addArrangedSubview(label(appVersion, size: 13, color: .secondaryLabelColor))
+            versionWords.addArrangedSubview(label(appVersion, size: 13, color: KlikTheme.mutedInk))
             versionRow.addArrangedSubview(versionWords)
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -562,11 +570,11 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         card.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         if let issue {
             content.addArrangedSubview(label(strings.message(for: issue, fallback: .shortcutUnavailable),
-                                             size: 12, color: .systemRed))
+                                             size: 12, color: KlikTheme.danger))
         } else if recording {
-            content.addArrangedSubview(label(strings(.recordingHint), size: 12, color: .secondaryLabelColor))
+            content.addArrangedSubview(label(strings(.recordingHint), size: 12, color: KlikTheme.mutedInk))
         } else if reviewing {
-            content.addArrangedSubview(label(strings(.reopenHint), size: 12, color: .secondaryLabelColor))
+            content.addArrangedSubview(label(strings(.reopenHint), size: 12, color: KlikTheme.mutedInk))
         }
 
         if reviewing {
@@ -607,7 +615,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     }
 
     private func label(_ text: String, size: CGFloat = 14, weight: NSFont.Weight = .regular,
-                       color: NSColor = .labelColor) -> NSTextField {
+                       color: NSColor = KlikTheme.ink) -> NSTextField {
         let field = NSTextField(wrappingLabelWithString: text)
         field.font = .systemFont(ofSize: size, weight: weight)
         field.textColor = color
@@ -622,33 +630,6 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             button.keyEquivalent = "\r"
         }
         return button
-    }
-}
-
-// Draw buttons with the same surface and outline as the settings pickers.
-private final class ForestButton: NSButton {
-    var isPrimary = false
-    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
-
-    override var intrinsicContentSize: NSSize {
-        let size = super.intrinsicContentSize
-        return NSSize(width: max(size.width, 65), height: 26)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
-        (isPrimary ? KlikTheme.primary : KlikTheme.keycap).withAlphaComponent(isEnabled ? 1 : 0.55).setFill()
-        shape.fill()
-        (window?.firstResponder === self ? KlikTheme.selection : NSColor.separatorColor).setStroke()
-        shape.lineWidth = 1
-        shape.stroke()
-        let style = NSMutableParagraphStyle()
-        style.alignment = .center
-        style.lineBreakMode = .byTruncatingTail
-        let font = NSFont.systemFont(ofSize: 13)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: isPrimary ? NSColor.white : NSColor.labelColor, .paragraphStyle: style]
-        let height = (title as NSString).size(withAttributes: attrs).height
-        (title as NSString).draw(in: NSRect(x: 7, y: (bounds.height - height) / 2, width: max(0, bounds.width - 14), height: height + 2), withAttributes: attrs)
     }
 }
 
@@ -674,13 +655,13 @@ private final class ForestSwitch: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let track = CGRect(x: 0, y: 2, width: 40, height: 20)
         let trackPath = NSBezierPath(roundedRect: track, xRadius: 10, yRadius: 10)
-        (state == .on ? KlikTheme.primary : NSColor.secondaryLabelColor.withAlphaComponent(0.34)).setFill()
+        (state == .on ? KlikTheme.action : KlikTheme.outline).setFill()
         trackPath.fill()
         let knob = CGRect(x: state == .on ? 21 : 3, y: 4, width: 16, height: 16)
-        NSColor.white.setFill()
+        (state == .on ? KlikTheme.actionInk : KlikTheme.card).setFill()
         NSBezierPath(ovalIn: knob).fill()
         if window?.firstResponder === self {
-            KlikTheme.selection.setStroke()
+            (state == .on ? KlikTheme.actionInk : KlikTheme.action).setStroke()
             trackPath.lineWidth = 2
             trackPath.stroke()
         }
@@ -706,6 +687,9 @@ private final class SetupSurface: NSView {
         self.cornerRadius = cornerRadius
         self.outlined = outlined
         super.init(frame: .zero)
+        wantsLayer = true
+        KlikTheme.round(layer, radius: cornerRadius, clips: cornerRadius > 0)
+        updateColors()
         guard let content else { return }
         addSubview(content)
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -719,21 +703,17 @@ private final class SetupSurface: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    override func draw(_ dirtyRect: NSRect) {
-        let rect = outlined ? bounds.insetBy(dx: 0.5, dy: 0.5) : bounds
-        let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
-        color.setFill()
-        path.fill()
-        if outlined {
-            NSColor.separatorColor.setStroke()
-            path.lineWidth = 1
-            path.stroke()
-        }
-    }
-
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        needsDisplay = true
+        updateColors()
+    }
+
+    private func updateColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = color.cgColor
+            layer?.borderColor = outlined ? KlikTheme.outline.cgColor : nil
+            layer?.borderWidth = outlined ? 1 : 0
+        }
     }
 }
 

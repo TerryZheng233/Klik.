@@ -25,10 +25,7 @@ final class RecognitionImageView: NSView {
         self.image = NSImage(cgImage: image, size: selection.size)
         super.init(frame: .zero)
         identifier = NSUserInterfaceItemIdentifier("ocrImageCard")
-        wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        layer?.masksToBounds = true
+        KlikTheme.styleCaptureImage(self, radius: KlikTheme.cornerRadius)
     }
     required init?(coder: NSCoder) { nil }
 
@@ -100,6 +97,7 @@ final class RecognitionImageView: NSView {
         field.placeholderString = placeholder
         field.isBezeled = true
         field.bezelStyle = .roundedBezel
+        KlikTheme.styleMarkupField(field)
         field.usesSingleLineMode = true
         addSubview(field)
         input = field

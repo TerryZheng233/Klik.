@@ -13,8 +13,8 @@ final class CaptureCoach: NSView {
     private let title = NSTextField(labelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private let count = NSTextField(labelWithString: "")
-    private let back = NSButton()
-    private let next = NSButton()
+    private let back = ForestButton()
+    private let next = ForestButton()
     private var stepIndex = 0
     private var stepCount = 0
     private weak var highlightedButton: NSButton?
@@ -22,22 +22,18 @@ final class CaptureCoach: NSView {
     init(strings: AppStrings) {
         self.strings = strings
         super.init(frame: .zero)
-        appearance = NSAppearance(named: .darkAqua)
-        wantsLayer = true
-        layer?.backgroundColor = KlikTheme.panelTint.withAlphaComponent(0.98).cgColor
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
-        layer?.borderWidth = 1
-        layer?.cornerRadius = 12
+        KlikTheme.styleOverlay(self, opaque: true)
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.textColor = KlikTheme.overlayInk
         title.lineBreakMode = .byTruncatingTail
         detail.font = .systemFont(ofSize: 12)
-        detail.textColor = KlikTheme.overlayInk.withAlphaComponent(0.82)
+        detail.textColor = KlikTheme.overlayMuted
         detail.maximumNumberOfLines = 2
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
         count.textColor = KlikTheme.accent
         count.alignment = .right
         configure(back, title: strings(.back), action: #selector(previousStep))
+        next.isPrimary = true
         configure(next, title: strings(.next), action: #selector(nextStep))
         for child in [title, detail, count, back, next] as [NSView] { addSubview(child) }
     }
@@ -112,12 +108,10 @@ final class CaptureCoach: NSView {
         detail.frame = CGRect(x: 13, y: 34, width: bounds.width - 26, height: 35)
     }
 
-    private func configure(_ button: NSButton, title: String, action: Selector) {
+    private func configure(_ button: ForestButton, title: String, action: Selector) {
         button.title = title
         button.target = self
         button.action = action
-        button.bezelStyle = .rounded
-        button.controlSize = .small
         button.refusesFirstResponder = true
     }
 

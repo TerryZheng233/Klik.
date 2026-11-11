@@ -66,6 +66,200 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
+    func testScrollCaptureToolbarPassesTheSelectedDisplayRegion() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        var selected: CGRect?
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings,
+                                 startScrollCapture: { selected = $0 }) { _ in XCTFail("Capture closed") }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        let button = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolScrollCapture) })
+        let start = CGPoint(x: 40, y: 400)
+        func select(to end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+
+        try select(to: CGPoint(x: 80, y: 340))
+        button.performClick(nil)
+        XCTAssertNil(selected)
+
+        let freshStart = CGPoint(x: 30, y: 420)
+        let end = CGPoint(x: 340, y: 150)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: freshStart, in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        button.performClick(nil)
+        XCTAssertEqual(selected, CGRect(x: 30, y: 60, width: 310, height: 270))
+    }
+
+    @MainActor
+    func testStitchedPreviewClipsItsSurfaceInsideTransparentShadowMargins() throws {
+        _ = NSApplication.shared
+        let preview = ScrollCapturePreview(image: try testImage(), axis: .vertical,
+                                           screenFrame: CGRect(x: -2_000, y: -2_000, width: 900, height: 720),
+                                           strings: AppStrings(), message: nil)
+        defer { preview.orderOut(nil) }
+        XCTAssertFalse(preview.isOpaque)
+        XCTAssertEqual(preview.backgroundColor, .clear)
+        XCTAssertFalse(preview.hasShadow)
+        let chrome = try XCTUnwrap(preview.contentView)
+        let surface = try XCTUnwrap(chrome.subviews.first { $0.identifier?.rawValue == "scrollPreviewSurface" })
+        XCTAssertTrue(chrome.bounds.contains(surface.frame))
+        XCTAssertGreaterThan(surface.frame.minX, chrome.bounds.minX)
+        XCTAssertLessThan(surface.frame.maxX, chrome.bounds.maxX)
+        XCTAssertGreaterThan(surface.frame.minY, chrome.bounds.minY)
+        XCTAssertLessThan(surface.frame.maxY, chrome.bounds.maxY)
+        XCTAssertEqual(chrome.layer?.isOpaque, false)
+        XCTAssertNotNil(chrome.layer?.shadowPath)
+        XCTAssertEqual(surface.layer?.cornerCurve, .continuous)
+        XCTAssertEqual(surface.layer?.masksToBounds, true)
+    }
+
+    @MainActor
+    func testStitchedPreviewExportsMarksFromSeparateViewports() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let context = try XCTUnwrap(CaptureImage.bitmap(width: 360, height: 1_600))
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 360, height: 1_600))
+        let preview = ScrollCapturePreview(image: try XCTUnwrap(context.makeImage()), axis: .vertical,
+                                           screenFrame: CGRect(x: -2_000, y: -2_000, width: 900, height: 720),
+                                           strings: strings, message: nil)
+        defer { preview.orderOut(nil) }
+        func views(in view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap { views(in: $0) } }
+        let children = views(in: try XCTUnwrap(preview.contentView))
+        let scroll = try XCTUnwrap(children.compactMap { $0 as? NSScrollView }.first)
+        let canvas = try XCTUnwrap(scroll.documentView as? CaptureView)
+        let rectangle = try XCTUnwrap(children.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolRectangle) })
+        let save = try XCTUnwrap(children.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolDownload) })
+        rectangle.performClick(nil)
+        func mark(y: CGFloat) throws {
+            let x = canvas.bounds.midX - 40
+            let start = canvas.convert(CGPoint(x: x, y: y), to: nil)
+            let end = canvas.convert(CGPoint(x: x + 80, y: y + 60), to: nil)
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: preview))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: preview))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: preview))
+        }
+        try mark(y: 90)
+        scroll.contentView.scroll(to: CGPoint(x: 0, y: 700))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        try mark(y: canvas.visibleRect.minY + 100)
+        XCTAssertEqual(canvas.marks.count, 2)
+
+        var saved: CGImage?
+        preview.onExport = { destination, image in
+            XCTAssertEqual(destination, .downloads)
+            saved = image
+        }
+        save.performClick(nil)
+        let result = try XCTUnwrap(saved)
+        XCTAssertEqual(result.width, 360)
+        XCTAssertEqual(result.height, 1_600)
+        let pixels = CaptureImage(image: result, size: CGSize(width: 360, height: 1_600))
+        for mark in canvas.marks {
+            let rect = try XCTUnwrap(mark.movableBounds)
+            let color = try XCTUnwrap(pixels.color(at: CGPoint(x: 180, y: rect.minY - 10)))
+            XCTAssertGreaterThan(color.red, color.green + 0.2)
+        }
+    }
+
+    @MainActor
+    func testSelectionBadgeShowsExportPixelsAndTracksShiftImmediately() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let source = try XCTUnwrap(CaptureImage.bitmap(width: 1_280, height: 960)?.makeImage())
+        var exported: Data?
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480), image: source,
+                                 windowTargets: [WindowSnap(id: 1, frame: CGRect(x: 20, y: 20, width: 240, height: 120))],
+                                 strings: strings, saveDownload: { exported = $0 }) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView)
+        func badge(_ id: String) throws -> (NSView, NSTextField) {
+            let view = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == id })
+            view.layoutSubtreeIfNeeded()
+            return (view, try XCTUnwrap(view.subviews.compactMap { $0 as? NSTextField }.first))
+        }
+        let (hint, label) = try badge("captureModeHint")
+        XCTAssertEqual(label.stringValue, "Hold space to select a window")
+        XCTAssertEqual(label.frame.midX, hint.bounds.midX, accuracy: 0.5)
+        XCTAssertEqual(label.frame.midY, hint.bounds.midY, accuracy: 0.5)
+        let hintWidth = (label.stringValue as NSString).size(withAttributes: [.font: label.font ?? NSFont.systemFont(ofSize: 12)]).width
+        XCTAssertGreaterThanOrEqual(label.frame.width, hintWidth + 6)
+
+        let start = CGPoint(x: 100.25, y: 380.25)
+        let end = CGPoint(x: 222.75, y: 292.25)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+        let (size, dimensions) = try badge("capturePixelSize")
+        XCTAssertFalse(size.isHidden)
+        XCTAssertEqual(dimensions.stringValue, "246 x 177")
+        func shift(_ modifiers: NSEvent.ModifierFlags) throws {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .flagsChanged, location: end, modifierFlags: modifiers,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "",
+                charactersIgnoringModifiers: "", isARepeat: false, keyCode: UInt16(kVK_Shift)))
+            panel.sendEvent(event)
+        }
+        try shift(.shift)
+        XCTAssertEqual(dimensions.stringValue, "245 x 245")
+        try shift([])
+        XCTAssertEqual(dimensions.stringValue, "246 x 177")
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel, modifiers: .shift))
+        XCTAssertEqual(dimensions.stringValue, "245 x 245")
+
+        let save = try XCTUnwrap(canvas.subviews.flatMap(\.subviews).compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolDownload) })
+        save.performClick(nil)
+        let png = try XCTUnwrap(exported)
+        let imageSource = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(imageSource, 0, nil))
+        XCTAssertEqual(image.width, 245)
+        XCTAssertEqual(image.height, 245)
+    }
+
+    @MainActor
+    func testEllipseButtonPrecedesRectangleAndShiftDrawsACircle() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let controls = canvas.subviews.flatMap(\.subviews).compactMap { $0 as? NSButton }
+        let ellipse = try XCTUnwrap(controls.first { $0.toolTip == strings(.toolEllipse) })
+        let rectangle = try XCTUnwrap(controls.first { $0.toolTip == strings(.toolRectangle) })
+        XCTAssertEqual(ellipse.frame.maxX, rectangle.frame.minX, accuracy: 0.5)
+
+        func drag(_ start: CGPoint, _ end: CGPoint, modifiers: NSEvent.ModifierFlags = []) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel, modifiers: modifiers))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel, modifiers: modifiers))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel, modifiers: modifiers))
+        }
+        try drag(CGPoint(x: 80, y: 420), CGPoint(x: 550, y: 70))
+        ellipse.performClick(nil)
+        try drag(CGPoint(x: 130, y: 370), CGPoint(x: 245, y: 330))
+        try drag(CGPoint(x: 305, y: 365), CGPoint(x: 410, y: 310), modifiers: .shift)
+        XCTAssertEqual(canvas.marks, [
+            .ellipse(CGRect(x: 130, y: 110, width: 115, height: 40), .red),
+            .ellipse(CGRect(x: 305, y: 115, width: 105, height: 105), .red)
+        ])
+        XCTAssertTrue(canvas.marks[1].hitTest(CGPoint(x: 357.5, y: 115)))
+        XCTAssertFalse(canvas.marks[1].hitTest(CGPoint(x: 357.5, y: 167.5)))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.count, 1)
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.count, 2)
+    }
+
+    @MainActor
     func testSelectedRegionCanBeCopiedByDoubleClickOrEnter() throws {
         _ = NSApplication.shared
         let image = try testImage()
@@ -641,8 +835,8 @@ final class CapturePanelTests: XCTestCase {
 
     @MainActor
     private func mouse(_ type: NSEvent.EventType, at point: CGPoint, in panel: NSWindow,
-                       count: Int = 1) throws -> NSEvent {
-        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                       count: Int = 1, modifiers: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: modifiers, timestamp: 0,
                                         windowNumber: panel.windowNumber, context: nil,
                                         eventNumber: 0, clickCount: count, pressure: 1))
     }

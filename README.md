@@ -19,7 +19,8 @@ Press **⌥A**, or set a shortcut you like. Select an area, add annotations if y
 ## What you can do
 
 - **Capture and copy:** Pick an area, display, or window, then paste your screenshot wherever you need it.
-- **Mark it up:** Add shapes, arrows, text, or pen strokes. Cover details with pixelation, a soft brush, or a solid color, and pick colors straight from the image.
+- **Capture while scrolling:** Stitch a long page or a wide view as you scroll. You can reverse direction during the same capture.
+- **Mark it up:** Add circles, boxes, arrows, text, or pen strokes to a regular or stitched screenshot. Cover details with pixelation, a soft brush, or a solid color, and pick colors straight from the image.
 - **Pick out text:** Review and edit text recognized on your Mac alongside the screenshot, then copy it or carry on marking up the image.
 - **Save it for later:** Save a PNG to a folder you choose, or keep a history of recent screenshots on your Mac.
 
@@ -32,6 +33,7 @@ I love how easy it is to take a screenshot in WeChat. But confirming one can bri
 | Do this | What happens |
 | --- | --- |
 | **Drag** | Frame part of the screen. Pull an edge or corner to adjust the selection |
+| **Hold Shift while selecting** | Keep the region square. Its pixel dimensions update at the top left |
 | **Click before selecting** | Select the whole display under your pointer |
 | **Hold Space and click** | Select a window, including the parts another window covers |
 | **Double-click** | Copy the selection when no annotation tool is active. Hold Space and double-click to copy a window |
@@ -42,13 +44,21 @@ I love how easy it is to take a screenshot in WeChat. But confirming one can bri
 | **⇧⌘Z** | Redo an annotation you just undid |
 | **Recognize Text** | Recognize text on this Mac, then review or edit it before copying |
 | **Scroll over a mosaic brush** | Adjust the brush width |
-| **Hold Shift while drawing** | Draw a straight pen or mosaic stroke, a square, or an arrow snapped to 45° |
+| **Hold Shift while drawing** | Draw a straight pen or mosaic stroke, a circle, a square, or an arrow snapped to 45° |
 
 Want to capture a partly covered window? Hold **Space**, point to any visible part, and click to select the full window. A magnifier appears as you drag or adjust a selection, so you can line up the edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
 
 Drag a box, arrow, text, or pen mark if you want to move it. You can resize a box using its handles or adjust an arrow by dragging an endpoint. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
+
+## Scrolling screenshots
+
+1. Frame the part of the page or app that scrolls, then click **Scrolling Screenshot** in the toolbar.
+2. Scroll inside the selection at a steady pace. The first detected movement sets the axis. You can scroll up and down or left and right, including reversing direction on that axis.
+3. Click **Done** to review the stitched image. Scroll through it and add any markup you need. Press **Enter** or click **✓** to copy it, or use **↓** to save a PNG at its full stitched resolution.
+
+<p align="center"><img src="docs/klik-scrolling-preview.png" alt="Klik. scrolling screenshot preview with markup tools and the stitched image dimensions." width="560"></p>
 
 ## Recognize text
 
@@ -101,11 +111,11 @@ These steps create an exception for the app. If you don’t see the option, or y
 
 ## Recent screenshots and settings
 
-Find your recent screenshots under **k.** in the menu bar. They’re stored on your Mac; select one to preview and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
+Find your recent screenshots under **k.** in the menu bar. They’re stored on your Mac, and you can select one to preview or copy it again. To clear the list, click **Clear All**, then click the red **Confirm** button in the same spot. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
 
 In settings, you can also have Klik. open at login and check for updates. When a new version is available, you can install it there and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing. GitHub releases use ad hoc app signing, so macOS may request screen recording permission again after an update.
 
-You can also change your shortcut in settings, or choose **Follow System**, **English**, or **简体中文** under **Language**. The guide and settings follow your Mac’s light or dark appearance.
+You can also change your shortcut in settings, or choose **Follow System**, **English**, or **简体中文** under **Language**. The olive-and-cream palette runs through the app, including the guide, settings, and capture tools. The guide, settings, and scrolling capture prompt follow your Mac’s light or dark appearance.
 
 ![Illustration of Klik. settings in English light mode and Simplified Chinese dark mode.](docs/klik-interface.png)
 

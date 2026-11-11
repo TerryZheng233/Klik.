@@ -38,6 +38,7 @@
 "captureFailed" = "截图未完成";
 "displayChanged" = "显示器状态已变化，请重新截图。";
 "overlayFocus" = "截图浮层未获得键盘焦点，请重新截图。";
+"toolEllipse" = "圆形";
 "toolRectangle" = "矩形";
 "toolArrow" = "箭头";
 "toolPen" = "画笔";
@@ -71,6 +72,7 @@
 "practiceSelectDetail" = "按住空格高亮窗口，再单击选中。";
 "practiceStep" = "%d / %d";
 "practiceHideTips" = "收起提示";
+"practiceEllipse" = "拖动画椭圆，按住 Shift 画正圆。";
 "practiceRectangle" = "在选区内拖动，用矩形框出重点。";
 "practiceArrow" = "在选区内从箭尾拖到箭头，指向想标出的地方。";
 "practicePen" = "在选区里自由画线或圈出重点。";
@@ -82,7 +84,7 @@
 "practiceDownload" = "将 PNG 保存到所选文件夹并结束截图。";
 "practiceCancel" = "取消这次截图并回到引导。按 Esc 效果相同。";
 "practiceConfirm" = "复制到剪贴板并完成截图。按 Enter 效果相同。";
-"windowSnapHint" = "按住空格  ·  选择窗口";
+"windowSnapHint" = "按住空格键选择窗口";
 "windowSnapActive" = "单击选中窗口  ·  松开空格返回";
 "windowCapturePending" = "正在截取窗口…";
 "windowCaptureFailed" = "无法截取此窗口。请重新选中窗口，或拖动框选屏幕。";
@@ -90,8 +92,8 @@
 "menuHistory" = "最近截图";
 "menuHistoryEmpty" = "暂无最近截图";
 "menuHistoryClear" = "清空";
-"historyClearTitle" = "清空最近截图？";
-"historyClearBody" = "这会删除 Klik. 在这台 Mac 上保存的所有最近截图。";
+"menuHistoryConfirmClear" = "确认";
+"menuHistoryConfirmClearHint" = "再次点击以清空截图历史。";
 "menuQuit" = "退出 Klik.";
 "historyErrorTitle" = "无法访问最近截图";
 "historyErrorBody" = "请检查 Klik. 的应用支持文件夹访问权限，然后重试。";
@@ -166,3 +168,19 @@
 "ocrReplaceTitle" = "替换已编辑的文字？";
 "ocrReplaceMessage" = "重新识别会替换你编辑过的文字。";
 "ocrReplaceButton" = "替换文字";
+
+"toolScrollCapture" = "滚动截图";
+"scrollSelectionSmall" = "请框选至少 64 × 96 点的滚动区域。";
+"scrollSelectionMarked" = "请撤销标注或重新框选，再开始滚动截图。";
+"scrollStarting" = "正在获取第一帧…";
+"scrollReady" = "在框内上下或左右滚动。首次滚动会锁定纵向或横向。";
+"scrollProgress" = "已拼接 %lld 像素高。可以继续滚动，或点「完成」。";
+"scrollUnaligned" = "当前画面对不上。请滚回已截到的位置，再慢慢滚动。";
+"scrollLimit" = "已达到长图大小上限。点「完成」查看已截取的部分。";
+"scrollFinishing" = "正在拼接长图…";
+"scrollPartial" = "最后的画面无法对齐。预览显示截至上一次成功拼接的内容。";
+"scrollSourceFailed" = "屏幕截取已中断。";
+"scrollPreviewTitle" = "滚动截图预览";
+"scrollDimensions" = "%lld × %lld 像素";
+"scrollProgressWide" = "已拼接 %lld 像素宽。可以继续滚动，或点「完成」。";
+"scrollMosaicHint" = "马赛克（按住 Option 滚动可调整画笔大小）";

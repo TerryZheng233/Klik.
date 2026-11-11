@@ -1,12 +1,17 @@
 import AppKit
 
 /// A restrained hover surface for the capture controls, preserving selected tool state.
-final class HoverButton: NSButton {
+class HoverButton: NSButton {
     private var hoverTracking: NSTrackingArea?
-    private var hovered = false
-    var toolSelected = false { didSet { updateSurface() } }
+    private(set) var hovered = false
+    var toolSelected = false {
+        didSet {
+            contentTintColor = toolSelected ? KlikTheme.accent : KlikTheme.overlayInk
+            updateSurface(animated: true)
+        }
+    }
 
-    override var isEnabled: Bool { didSet { updateSurface() } }
+    override var isEnabled: Bool { didSet { updateSurface(animated: true) } }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -18,21 +23,46 @@ final class HoverButton: NSButton {
         hoverTracking = area
     }
 
-    override func mouseEntered(with event: NSEvent) { hovered = true; updateSurface() }
-    override func mouseExited(with event: NSEvent) { hovered = false; updateSurface() }
-    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateSurface() }
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true
+        updateSurface(animated: true)
+    }
 
-    private func updateSurface() {
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        updateSurface(animated: true)
+    }
+
+    override func highlight(_ flag: Bool) {
+        super.highlight(flag)
+        updateSurface(animated: true)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        hovered = false
+        updateSurface(animated: false)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateSurface(animated: false)
+    }
+
+    func updateSurface(animated: Bool) {
         wantsLayer = true
         guard let layer else { return }
-        layer.cornerRadius = 6
+        KlikTheme.round(layer, radius: KlikTheme.controlRadius, clips: false)
         let showHover = hovered && isEnabled
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let color: NSColor = toolSelected ? KlikTheme.buttonSelected : NSColor.labelColor.withAlphaComponent(0.13)
-            layer.backgroundColor = (toolSelected || showHover) ? color.cgColor : NSColor.clear.cgColor
+            let base = toolSelected ? KlikTheme.buttonSelected : KlikTheme.hover.withAlphaComponent(0.72)
+            let pressed = isHighlighted && isEnabled
+            let color = pressed ? (base.blended(withFraction: 0.18, of: KlikTheme.action) ?? base) : base
+            let fill = (toolSelected || showHover || pressed) ? color : KlikTheme.overlaySurface.withAlphaComponent(0)
+            KlikTheme.setBackground(fill.cgColor, on: layer, animated: animated && window?.isVisible == true)
         }
         layer.shadowColor = NSColor.black.cgColor
-        layer.shadowOpacity = showHover ? 0.28 : 0
+        layer.shadowOpacity = showHover ? 0.16 : 0
         layer.shadowRadius = 3
         layer.shadowOffset = CGSize(width: 0, height: -1)
     }
@@ -45,20 +75,23 @@ extension NSButton {
         guard let confirmation = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) else { return }
         confirmation.size = NSSize(width: 18, height: 18)
         wantsLayer = true
-        let transition = CATransition()
-        transition.type = .fade
-        transition.duration = 0.16
-        layer?.add(transition, forKey: "confirmationTransition")
+        fadeConfirmation()
         image = confirmation
         contentTintColor = color
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.image === confirmation else { return }
-            let transition = CATransition()
-            transition.type = .fade
-            transition.duration = 0.16
-            self.layer?.add(transition, forKey: "confirmationTransition")
+            self.fadeConfirmation()
             self.image = previousImage
             self.contentTintColor = previousTint
         }
+    }
+
+    private func fadeConfirmation() {
+        let duration = KlikTheme.transitionDuration
+        guard duration > 0 else { return }
+        let transition = CATransition()
+        transition.type = .fade
+        transition.duration = duration
+        layer?.add(transition, forKey: "confirmationTransition")
     }
 }

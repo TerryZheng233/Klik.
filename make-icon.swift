@@ -4,13 +4,14 @@ import CoreText
 enum IconError: Error { case cannotEncode }
 
 let iconset = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+let cream = NSColor(srgbRed: 248.0 / 255, green: 243.0 / 255, blue: 225.0 / 255, alpha: 1)
+let sage = NSColor(srgbRed: 174.0 / 255, green: 183.0 / 255, blue: 132.0 / 255, alpha: 1)
 let wordmark = NSMutableAttributedString(string: "k.", attributes: [
     .font: NSFont.systemFont(ofSize: 586, weight: .bold),
-    .foregroundColor: NSColor(srgbRed: 0.97, green: 0.97, blue: 0.94, alpha: 1),
+    .foregroundColor: cream,
     .kern: -10
 ])
-wordmark.addAttribute(.foregroundColor, value: NSColor(srgbRed: 0.75, green: 0.96, blue: 0.36, alpha: 1),
-                      range: NSRange(location: 1, length: 1))
+wordmark.addAttribute(.foregroundColor, value: sage, range: NSRange(location: 1, length: 1))
 let glyphs = CTLineCreateWithAttributedString(wordmark)
 let inkBounds = CTLineGetBoundsWithOptions(glyphs, .useGlyphPathBounds)
 
@@ -28,10 +29,10 @@ func renderIcon(pixels: Int) throws -> Data {
 
     let tile = CGRect(x: 98, y: 98, width: 828, height: 828)
     let edge = NSBezierPath(roundedRect: tile, xRadius: 198, yRadius: 198)
-    let top = NSColor(srgbRed: 0.17, green: 0.18, blue: 0.18, alpha: 1)
-    let bottom = NSColor(srgbRed: 0.08, green: 0.09, blue: 0.09, alpha: 1)
+    let top = NSColor(srgbRed: 65.0 / 255, green: 67.0 / 255, blue: 27.0 / 255, alpha: 1)
+    let bottom = NSColor(srgbRed: 40.0 / 255, green: 42.0 / 255, blue: 26.0 / 255, alpha: 1)
     NSGradient(starting: bottom, ending: top)?.draw(in: edge, angle: 90)
-    NSColor(white: 1, alpha: 0.15).setStroke()
+    cream.withAlphaComponent(0.15).setStroke()
     edge.lineWidth = 4
     edge.stroke()
 

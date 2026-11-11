@@ -42,6 +42,7 @@ final class CapturePanel: NSPanel {
 
     init(frame: CGRect, image: CGImage, windowTargets: [WindowSnap] = [], strings: AppStrings = AppStrings(),
          guided: Bool = false, scrollHintPolicy: MosaicScrollHintPolicy = MosaicScrollHintPolicy(), captureWindow: ((CGWindowID) async throws -> CGImage)? = nil,
+         startScrollCapture: ((CGRect) -> Void)? = nil,
          recognizeText: @escaping (CGImage) async throws -> String = { image in
              try await Task.detached(priority: .userInitiated) { try TextRecognition.recognize(image) }.value
          },
@@ -51,7 +52,8 @@ final class CapturePanel: NSPanel {
          finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
                              windowTargets: windowTargets, strings: strings, guided: guided,
-                             scrollHintPolicy: scrollHintPolicy, captureWindow: captureWindow, recognizeText: recognizeText,
+                             scrollHintPolicy: scrollHintPolicy, captureWindow: captureWindow,
+                             startScrollCapture: startScrollCapture, recognizeText: recognizeText,
                              saveDownload: saveDownload, pasteboard: pasteboard,
                              recordCapture: recordCapture, finish: finish)
         super.init(contentRect: frame, styleMask: .borderless,
@@ -127,6 +129,7 @@ final class CapturePanel: NSPanel {
             }
             return
         }
+        if event.type == .flagsChanged { canvas.selectionModifiersChanged(event.modifierFlags) }
         if event.type == .keyUp, Int(event.keyCode) == kVK_Space, canvas.isWindowSnapHeld {
             canvas.setWindowSnapHeld(false, at: mouseLocationOutsideOfEventStream)
             return
@@ -178,9 +181,9 @@ private final class EyedropperPreview: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.cornerRadius = 4
+        KlikTheme.round(layer, radius: 4)
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.black.withAlphaComponent(0.85).cgColor
+        layer?.borderColor = KlikTheme.selectionHalo.cgColor
         let innerBorder = CALayer()
         innerBorder.frame = bounds.insetBy(dx: 1, dy: 1)
         innerBorder.cornerRadius = 3
@@ -218,11 +221,11 @@ private final class MosaicScrollHint: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor(white: 0.10, alpha: 0.88).cgColor
-        layer?.cornerRadius = 7
+        layer?.backgroundColor = KlikTheme.panelTint.cgColor
+        KlikTheme.round(layer, radius: KlikTheme.badgeRadius)
         wheel.frame = CGRect(x: 10, y: 7, width: 2.5, height: 4)
         wheel.cornerRadius = 1.25
-        wheel.backgroundColor = NSColor.white.cgColor
+        wheel.backgroundColor = KlikTheme.overlayInk.cgColor
         layer?.addSublayer(wheel)
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let movement = CABasicAnimation(keyPath: "transform.translation.y")
@@ -251,8 +254,43 @@ private final class MosaicScrollHint: NSView {
     }
 }
 
-private final class CaptureHint: NSTextField {
+private final class CaptureBadge: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let insets: CGSize
+    var text: String {
+        get { label.stringValue }
+        set { label.stringValue = newValue; needsLayout = true }
+    }
+
+    init(font: NSFont, horizontalPadding: CGFloat = 12, verticalPadding: CGFloat = 6) {
+        insets = CGSize(width: horizontalPadding, height: verticalPadding)
+        super.init(frame: .zero)
+        KlikTheme.styleOverlay(self, radius: KlikTheme.badgeRadius)
+        label.font = font
+        label.textColor = KlikTheme.overlayInk
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) { nil }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func size(maximumWidth: CGFloat) -> CGSize {
+        let measured = (label.stringValue as NSString).size(withAttributes: [.font: label.font ?? NSFont.systemFont(ofSize: 12)])
+        let cellWidth = label.cell?.cellSize.width ?? 0
+        let textWidth = ceil(max(measured.width + 8, cellWidth))
+        return CGSize(width: max(1, min(maximumWidth, textWidth + 2 * insets.width)),
+                      height: ceil(label.intrinsicContentSize.height) + 2 * insets.height)
+    }
+
+    override func layout() {
+        super.layout()
+        let height = ceil(label.intrinsicContentSize.height)
+        label.frame = CGRect(x: insets.width, y: (bounds.height - height) / 2,
+                             width: max(0, bounds.width - 2 * insets.width), height: height)
+    }
 }
 
 enum MagnifierLayout {
@@ -279,7 +317,7 @@ private final class CaptureMagnifier: NSView {
         let outline = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10, yRadius: 10)
         context.saveGState()
         outline.addClip()
-        NSColor.windowBackgroundColor.setFill()
+        KlikTheme.overlayCanvas.setFill()
         bounds.fill()
         context.translateBy(x: bounds.midX, y: bounds.midY)
         context.scaleBy(x: 4, y: 4)
@@ -299,17 +337,18 @@ private final class CaptureMagnifier: NSView {
         KlikTheme.selection.setStroke()
         crosshair.lineWidth = 1
         crosshair.stroke()
-        NSColor.separatorColor.setStroke()
+        KlikTheme.overlayOutline.setStroke()
         outline.lineWidth = 1
         outline.stroke()
     }
 }
 
 enum Tool: CaseIterable {
-    case rectangle, arrow, pen, text, mosaic
+    case ellipse, rectangle, arrow, pen, text, mosaic
 
     var item: (symbol: String, label: UIKey, detail: UIKey) {
         switch self {
+        case .ellipse: return ("circle", .toolEllipse, .practiceEllipse)
         case .rectangle: return ("rectangle-horizontal", .toolRectangle, .practiceRectangle)
         case .arrow: return ("arrow-up-right", .toolArrow, .practiceArrow)
         case .pen: return ("pencil", .toolPen, .practicePen)
@@ -417,10 +456,16 @@ final class CaptureView: NSView {
     }
 
     private let desktop: CaptureImage
+    private let isDocument: Bool
+    private weak var documentToolbarHost: NSView?
+    private var documentExportInProgress = false
+    var onDocumentExport: ((Destination, CGImage) -> Void)?
+    var onDocumentStatus: ((String) -> Void)?
     private var windowImage: CaptureImage?
     private var background: CaptureImage { windowImage ?? desktop }
     private let windowTargets: [WindowSnap]
     private let captureWindow: ((CGWindowID) async throws -> CGImage)?
+    private let startScrollCapture: ((CGRect) -> Void)?
     private let recognizeText: (CGImage) async throws -> String
     private let saveDownload: (Data) throws -> Void
     private var recognitionTask: Task<Void, Never>?
@@ -443,8 +488,10 @@ final class CaptureView: NSView {
     private var strokeColor: CoverColor = .fallback
     private var pickingCoverColor = false
     private var pickingInkColor = false
-    private let modeHint = CaptureHint(labelWithString: "")
-    private let errorLabel = NSTextField(labelWithString: "")
+    private let modeHint = CaptureBadge(font: .systemFont(ofSize: 12, weight: .medium))
+    private let errorLabel = CaptureBadge(font: .systemFont(ofSize: 13, weight: .medium))
+    private let selectionSize = CaptureBadge(font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
+                                             horizontalPadding: 8, verticalPadding: 4)
     private let pointerView = PointerView()
     private let eyedropperPreview = EyedropperPreview(frame: CGRect(x: 0, y: 0, width: 17, height: 17))
     private let brushOutline = BrushOutline()
@@ -472,6 +519,7 @@ final class CaptureView: NSView {
     private var selectedMark: Int?
     private var preview: Mark?
     private var drag: Drag?
+    private var dragPoint: CGPoint?
     private var strokePoints: [CGPoint] = []
     private var tool: Tool?
     private var ink: Ink = .red
@@ -485,16 +533,20 @@ final class CaptureView: NSView {
 
     init(background: CaptureImage, windowTargets: [WindowSnap], strings: AppStrings, guided: Bool,
          scrollHintPolicy: MosaicScrollHintPolicy = MosaicScrollHintPolicy(), captureWindow: ((CGWindowID) async throws -> CGImage)?,
-         recognizeText: @escaping (CGImage) async throws -> String,
-         saveDownload: @escaping (Data) throws -> Void,
-         pasteboard: NSPasteboard,
+         startScrollCapture: ((CGRect) -> Void)? = nil,
+         documentSize: CGSize? = nil,
+         recognizeText: @escaping (CGImage) async throws -> String = { image in try TextRecognition.recognize(image) },
+         saveDownload: @escaping (Data) throws -> Void = { try CaptureDownload.save($0) },
+         pasteboard: NSPasteboard = .general,
          recordCapture: ((Data) -> Void)?,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.desktop = background
+        self.isDocument = documentSize != nil
         self.scrollHintPolicy = scrollHintPolicy
-        self.scrollHintAvailable = scrollHintPolicy.shouldShow
+        self.scrollHintAvailable = documentSize == nil && scrollHintPolicy.shouldShow
         self.windowTargets = windowTargets
         self.captureWindow = captureWindow
+        self.startScrollCapture = startScrollCapture
         self.recognizeText = recognizeText
         self.saveDownload = saveDownload
         self.pasteboard = pasteboard
@@ -503,7 +555,11 @@ final class CaptureView: NSView {
         self.mosaicOptions = MosaicOptions(strings: strings)
         self.coach = guided ? CaptureCoach(strings: strings) : nil
         self.finish = finish
-        super.init(frame: CGRect(origin: .zero, size: background.size))
+        super.init(frame: CGRect(origin: .zero, size: documentSize ?? background.size))
+        if isDocument {
+            selection = background.frame
+            identifier = NSUserInterfaceItemIdentifier("scrollMarkupDocument")
+        }
         buildToolbar()
         buildPalette()
         addSubview(mosaicOptions)
@@ -519,20 +575,11 @@ final class CaptureView: NSView {
             addSubview(coach)
             coach.onChange = { [weak self] in self?.refresh() }
         }
-        modeHint.font = .systemFont(ofSize: 12, weight: .medium)
-        modeHint.textColor = KlikTheme.overlayInk
-        modeHint.alignment = .center
-        modeHint.wantsLayer = true
-        modeHint.layer?.cornerRadius = 9
-        modeHint.layer?.backgroundColor = KlikTheme.panelTint.cgColor
+        modeHint.identifier = NSUserInterfaceItemIdentifier("captureModeHint")
+        selectionSize.identifier = NSUserInterfaceItemIdentifier("capturePixelSize")
         addSubview(modeHint)
-        errorLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        errorLabel.textColor = .white
-        errorLabel.backgroundColor = NSColor(white: 0.12, alpha: 0.96)
-        errorLabel.drawsBackground = true
-        errorLabel.alignment = .center
-        errorLabel.isHidden = true
         addSubview(errorLabel)
+        addSubview(selectionSize)
         magnifier.isHidden = true
         magnifier.setAccessibilityElement(false)
         magnifier.identifier = NSUserInterfaceItemIdentifier("captureMagnifier")
@@ -556,6 +603,11 @@ final class CaptureView: NSView {
         pointerView.setAccessibilityElement(false)
         addSubview(pointerView, positioned: .above, relativeTo: nil)
         refresh()
+    }
+
+    convenience init(document: CaptureImage, size: CGSize, strings: AppStrings, cancel: @escaping () -> Void) {
+        self.init(background: document, windowTargets: [], strings: strings, guided: false, captureWindow: nil,
+                  documentSize: size, recordCapture: nil) { _ in cancel() }
     }
 
     deinit {
@@ -618,7 +670,7 @@ final class CaptureView: NSView {
             hoveredWindow = candidate
             needsDisplay = true
         }
-        guard bounds.contains(point) else {
+        guard (isDocument ? visibleRect : bounds).contains(point) else {
             clearPointer()
             return
         }
@@ -635,10 +687,10 @@ final class CaptureView: NSView {
                 else if case .resizeArrow = drag { next = .move }
                 else if case .resizeMark(_, _, let handle, _, _) = drag { next = .resize(handle) }
                 else if let index = selectedMark, marks.indices.contains(index),
-                        case .rectangle(let rect, _) = marks[index],
+                        let rect = marks[index].resizableBounds,
                         let handle = Selection.Handle.hit(at: imagePoint, in: rect) { next = .resize(handle) }
                 else if let index = selectedMark, marks.indices.contains(index),
-                        case .rectangle(let rect, _) = marks[index], rect.contains(imagePoint) { next = .move }
+                        let rect = marks[index].resizableBounds, rect.contains(imagePoint) { next = .move }
                 else if markIndex(at: imagePoint) != nil { next = .move }
                 else if tool != nil { next = .crosshair }
                 else { next = .arrow }
@@ -647,10 +699,10 @@ final class CaptureView: NSView {
             next = .hand
         } else if let textField, textField.frame.contains(point) {
             next = .text
-        } else if (!toolbar.isHidden && toolbar.frame.contains(point))
+        } else if !isDocument && ((!toolbar.isHidden && toolbar.frame.contains(point))
                     || (!palette.isHidden && palette.frame.contains(point))
                     || (!mosaicOptions.isHidden && mosaicOptions.frame.contains(point))
-                    || coach?.hitTest(point) != nil {
+                    || coach?.hitTest(point) != nil) {
             next = .arrow
         } else if case .resize(let handle, _, _) = drag {
             next = .resize(handle)
@@ -662,21 +714,23 @@ final class CaptureView: NSView {
             next = .move
         } else if case .resizeMark(_, _, let handle, _, _) = drag {
             next = .resize(handle)
-        } else if drag == nil, let selection, let handle = Selection.Handle.hit(
+        } else if !isDocument, drag == nil, let selection, let handle = Selection.Handle.hit(
             at: point, in: selection, retaining: pointer?.resizeHandle
         ) {
             next = .resize(handle)
         } else if drag == nil, let index = selectedMark, marks.indices.contains(index),
-                  case .rectangle(let rect, _) = marks[index],
+                  let rect = marks[index].resizableBounds,
                   let handle = Selection.Handle.hit(at: point, in: rect) {
             next = .resize(handle)
         } else if drag == nil, let index = selectedMark, marks.indices.contains(index),
-                  case .rectangle(let rect, _) = marks[index], rect.contains(point) {
+                  let rect = marks[index].resizableBounds, rect.contains(point) {
             next = .move
         } else if drag == nil, selection?.contains(point) == true, markIndex(at: point) != nil {
             next = .move
         } else if drag == nil, tool == nil, let selection, selection.contains(point) {
-            next = .openHand
+            next = isDocument ? .arrow : .openHand
+        } else if isDocument, selection?.contains(point) != true {
+            next = .arrow
         } else {
             next = .crosshair
         }
@@ -686,7 +740,7 @@ final class CaptureView: NSView {
             inImage = recognitionView.capturePoint(at: point) != nil && !recognitionView.paletteContains(point)
             scale = recognitionView.imageScale
         } else {
-            inImage = selection?.contains(point) == true && (toolbar.isHidden || !toolbar.frame.contains(point))
+            inImage = selection?.contains(point) == true && (isDocument || toolbar.isHidden || !toolbar.frame.contains(point))
             scale = 1
         }
         let showBrush = tool == .mosaic && inImage && drag == nil && next == .crosshair
@@ -728,6 +782,11 @@ final class CaptureView: NSView {
         } else {
             eyedropperPreview.isHidden = true
         }
+        if isDocument {
+            pointer = next
+            next.cursor.set()
+            return
+        }
         let shapeChanged = pointer != next
         if shapeChanged {
             pointer = next
@@ -762,10 +821,14 @@ final class CaptureView: NSView {
             guard !recognitionView.paletteContains(point), !recognitionView.textContains(point),
                   recognitionView.capturePoint(at: point) != nil else { return false }
         } else {
-            guard let selection, selection.contains(point),
-                  (toolbar.isHidden || !toolbar.frame.contains(point)),
-                  (palette.isHidden || !palette.frame.contains(point)),
-                  (mosaicOptions.isHidden || !mosaicOptions.frame.contains(point)) else { return false }
+            guard let selection, selection.contains(point) else { return false }
+            if isDocument {
+                guard visibleRect.contains(point) else { return false }
+            } else {
+                guard (toolbar.isHidden || !toolbar.frame.contains(point)),
+                      (palette.isHidden || !palette.frame.contains(point)),
+                      (mosaicOptions.isHidden || !mosaicOptions.frame.contains(point)) else { return false }
+            }
         }
         guard delta != 0 else { return false }
         scrollHintAvailable = false
@@ -788,17 +851,19 @@ final class CaptureView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         desktop.draw(in: context)
         if let windowImage {
-            context.setFillColor(KlikTheme.panelTint.withAlphaComponent(1).cgColor)
+            context.setFillColor(KlikTheme.overlaySurface.cgColor)
             context.fill(windowImage.frame)
             windowImage.draw(in: context)
         }
         let active = draftSelection ?? selection ?? (drag == nil ? hoveredWindow : nil)
-        context.setFillColor(NSColor.black.withAlphaComponent(0.32).cgColor)
-        let mask = CGMutablePath()
-        mask.addRect(bounds)
-        if let active { mask.addRect(active) }
-        context.addPath(mask)
-        context.drawPath(using: .eoFill)
+        if !isDocument {
+            context.setFillColor(KlikTheme.overlayCanvas.withAlphaComponent(0.32).cgColor)
+            let mask = CGMutablePath()
+            mask.addRect(bounds)
+            if let active { mask.addRect(active) }
+            context.addPath(mask)
+            context.drawPath(using: .eoFill)
+        }
 
         guard let active else { return }
         if selection != nil, draftSelection == nil {
@@ -817,7 +882,7 @@ final class CaptureView: NSView {
                         context.fillEllipse(in: dot)
                         context.strokeEllipse(in: dot)
                     }
-                } else if case .rectangle(let rect, _) = mark {
+                } else if let rect = mark.resizableBounds {
                     for handle in Selection.Handle.allCases {
                         let point = handle.center(in: rect)
                         let dot = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
@@ -840,6 +905,7 @@ final class CaptureView: NSView {
             }
             context.restoreGState()
         }
+        guard !isDocument else { return }
         context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
         context.setLineWidth(3.5)
         context.stroke(active)
@@ -860,28 +926,29 @@ final class CaptureView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard recognitionView == nil else { return }
+        guard recognitionView == nil, !documentExportInProgress else { return }
         let point = mousePoint(event)
         if pickingInkColor { applyInkColor(at: point); return }
         if pickingCoverColor { applyCoverColor(at: point); return }
         doubleClickStart = event.clickCount == 2 ? point : nil
         if event.clickCount == 1, windowCaptureTask == nil { lastWindowClick = nil }
         guard windowCaptureTask == nil else { return }
+        dragPoint = point
         showPalette = false
         showMosaicOptions = false
         commitText()
         window?.makeFirstResponder(self)
         errorLabel.isHidden = true
-        if let selection, let handle = Selection.Handle.hit(at: point, in: selection,
+        if !isDocument, let selection, let handle = Selection.Handle.hit(at: point, in: selection,
                                                              retaining: pointer?.resizeHandle) {
             drag = .resize(handle, selection, point)
         } else if let selection, selection.contains(point) {
             if let index = selectedMark, marks.indices.contains(index),
-               case .rectangle(let rect, _) = marks[index],
+               let rect = marks[index].resizableBounds,
                let handle = Selection.Handle.hit(at: point, in: rect) {
                 drag = .resizeMark(index, marks[index], handle, point, marks)
             } else if let index = selectedMark, marks.indices.contains(index),
-                      case .rectangle(let rect, _) = marks[index], rect.contains(point) {
+                      let rect = marks[index].resizableBounds, rect.contains(point) {
                 drag = .moveMark(index, marks[index], point, marks)
             } else if let index = markIndex(at: point) {
                 selectedMark = index
@@ -907,10 +974,10 @@ final class CaptureView: NSView {
                     preview = tool == .pen ? .pen(strokePoints, ink) : .mosaic(strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
                 }
             case .none:
-                drag = .move(selection, point)
+                if !isDocument { drag = .move(selection, point) }
                 }
             }
-        } else {
+        } else if !isDocument {
             let target: ClickTarget = isWindowSnapHeld
                 ? .window(WindowSnap.target(at: point, in: windowTargets)) : .display
             drag = .select(point, moved: false, target: target)
@@ -923,6 +990,7 @@ final class CaptureView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard recognitionView == nil else { return }
         let point = mousePoint(event)
+        dragPoint = point
         updateDrag(at: point, shift: event.modifierFlags.contains(.shift))
         updateMagnifier(at: point)
         refresh()
@@ -931,8 +999,9 @@ final class CaptureView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard recognitionView == nil else { return }
         magnifier.isHidden = true
+        defer { dragPoint = nil }
         let point = mousePoint(event)
-        if event.clickCount == 2, let start = doubleClickStart,
+        if !isDocument, event.clickCount == 2, let start = doubleClickStart,
            hypot(point.x - start.x, point.y - start.y) <= 3 {
             doubleClickStart = nil
             if let target = lastWindowClick, target.frame.contains(point) {
@@ -1055,17 +1124,28 @@ final class CaptureView: NSView {
         magnifier.isHidden = false
     }
 
+    func selectionModifiersChanged(_ modifiers: NSEvent.ModifierFlags) {
+        guard let point = dragPoint else { return }
+        switch drag {
+        case .select, .resize:
+            updateDrag(at: point, shift: modifiers.contains(.shift))
+            updateMagnifier(at: point)
+            refresh()
+        default: break
+        }
+    }
+
     private func updateDrag(at point: CGPoint, shift: Bool = false) {
         switch drag {
         case .select(let start, let moved, let target):
-            let draft = Selection.between(start, point)
-            draftSelection = draft
-            if !moved, max(draft.width, draft.height) > 3 {
+            draftSelection = shift ? desktop.squareSelection(from: start, to: point) : Selection.between(start, point)
+            if !moved, max(abs(point.x - start.x), abs(point.y - start.y)) > 3 {
                 drag = .select(start, moved: true, target: target)
             }
         case .resize(let handle, let original, let start):
             let delta = CGPoint(x: point.x - start.x, y: point.y - start.y)
-            selection = handle.resize(original, delta: delta, in: windowImage?.frame ?? bounds)
+            selection = shift ? background.squareSelection(resizing: original, handle: handle, delta: delta)
+                              : handle.resize(original, delta: delta, in: windowImage?.frame ?? bounds)
         case .move(let original, let start):
             selection = Selection.move(original, from: start, to: point, in: windowImage?.frame ?? bounds)
         case .moveMark(let index, let original, let start, _):
@@ -1079,10 +1159,11 @@ final class CaptureView: NSView {
             }
             marks[index] = original.translated(by: CGPoint(x: dx, y: dy))
         case .resizeMark(let index, let original, let handle, let grabPoint, _):
-            guard marks.indices.contains(index), let selection,
-                  case .rectangle(let rect, let ink) = original else { return }
+            guard marks.indices.contains(index), let selection, let rect = original.resizableBounds else { return }
             let delta = CGPoint(x: point.x - grabPoint.x, y: point.y - grabPoint.y)
-            marks[index] = .rectangle(handle.resize(rect, delta: delta, in: selection), ink)
+            let resized = shift ? handle.resizeSquare(rect, delta: delta, in: selection, minimum: Selection.minimum)
+                                : handle.resize(rect, delta: delta, in: selection)
+            marks[index] = original.resized(to: resized)
         case .resizeArrow(let index, let original, let isStart, let grabPoint, _):
             guard marks.indices.contains(index), let selection,
                   case .arrow(let start, let end, let ink) = original else { return }
@@ -1097,10 +1178,11 @@ final class CaptureView: NSView {
             let end = CGPoint(x: min(max(point.x, selection.minX), selection.maxX),
                               y: min(max(point.y, selection.minY), selection.maxY))
             switch tool {
-            case .rectangle:
+            case .ellipse, .rectangle:
                 let final = shift ? MarkConstraint.squareEnd(from: start, toward: end, in: selection) : end
                 let rect = Selection.between(start, final)
-                preview = rect.width >= 2 && rect.height >= 2 ? .rectangle(rect, ink) : nil
+                preview = rect.width >= 2 && rect.height >= 2
+                    ? (tool == .ellipse ? .ellipse(rect, ink) : .rectangle(rect, ink)) : nil
             case .arrow:
                 let final = shift ? MarkConstraint.snappedEnd(from: start, toward: end, in: selection) : end
                 preview = hypot(final.x - start.x, final.y - start.y) >= 2 ? .arrow(start, final, ink) : nil
@@ -1125,7 +1207,13 @@ final class CaptureView: NSView {
             let button = HoverButton()
             button.tag = index
             let item = tool.item
-            configure(button, (item.symbol, item.label), action: #selector(pickTool(_:)))
+            if tool == .ellipse {
+                MarkupToolbarLayout.configureButton(button, symbol: item.symbol, fallback: "circle",
+                                                    label: strings(item.label), target: self, action: #selector(pickTool(_:)))
+            } else {
+                configure(button, (item.symbol, item.label), action: #selector(pickTool(_:)))
+            }
+            if isDocument, tool == .mosaic { button.toolTip = strings(.scrollMosaicHint) }
             toolButtons[tool] = button
             toolbarButtons.append(button)
             practiceSteps.append(.init(button: button, detail: item.detail))
@@ -1137,10 +1225,18 @@ final class CaptureView: NSView {
         configure(redoButton, ("redo", .toolRedo), action: #selector(redo))
         toolbarButtons.append(redoButton)
         practiceSteps.append(.init(button: redoButton, detail: .practiceRedo))
-        let recognizeButton = HoverButton()
-        configure(recognizeButton, ("scan-text", .toolRecognizeText), action: #selector(startTextRecognition))
-        toolbarButtons.append(recognizeButton)
-        practiceSteps.append(.init(button: recognizeButton, detail: .practiceRecognizeText))
+        if !isDocument {
+            let recognizeButton = HoverButton()
+            configure(recognizeButton, ("scan-text", .toolRecognizeText), action: #selector(startTextRecognition))
+            toolbarButtons.append(recognizeButton)
+            practiceSteps.append(.init(button: recognizeButton, detail: .practiceRecognizeText))
+        }
+        if startScrollCapture != nil {
+            let scrollButton = HoverButton()
+            MarkupToolbarLayout.configureButton(scrollButton, symbol: "scroll-capture", fallback: "arrow.up.and.down",
+                                                label: strings(.toolScrollCapture), target: self, action: #selector(beginScrollCapture))
+            toolbarButtons.append(scrollButton)
+        }
         let actions: [(String, UIKey, UIKey, Selector)] = [
             ("download", .toolDownload, .practiceDownload, #selector(download)),
             ("x", .toolCancel, .practiceCancel, #selector(cancel)),
@@ -1158,37 +1254,75 @@ final class CaptureView: NSView {
         }
         for divider in toolbarDividers {
             divider.wantsLayer = true
-            divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            divider.layer?.backgroundColor = KlikTheme.overlayDivider.cgColor
             toolbar.addSubview(divider)
         }
         configureSwatch(inkButton, action: #selector(togglePalette))
         inkButton.wantsLayer = true
-        inkButton.layer?.cornerRadius = 6
+        KlikTheme.round(inkButton.layer, radius: KlikTheme.controlRadius, clips: false)
         toolbar.addSubview(inkButton)
         layoutToolbarButtons()
     }
 
     private func configureTray(_ tray: NSVisualEffectView) {
-        tray.material = .hudWindow
-        tray.blendingMode = .withinWindow
-        tray.state = .active
-        tray.appearance = NSAppearance(named: .darkAqua)
-        tray.wantsLayer = true
-        tray.layer?.cornerRadius = 12
-        tray.layer?.backgroundColor = KlikTheme.panelTint.cgColor
-        tray.layer?.borderColor = NSColor.white.withAlphaComponent(0.17).cgColor
-        tray.layer?.borderWidth = 1
-        tray.layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(tray)
         tray.isHidden = true
         addSubview(tray)
     }
 
-    private func layoutToolbarButtons() {
+    private func layoutToolbarButtons(maximumWidth: CGFloat = .greatestFiniteMagnitude) {
         var visible = toolbarButtons
         visible.insert(inkButton, at: Tool.allCases.count)
-        let width = MarkupToolbarLayout.width(buttonCount: visible.count)
+        let width = min(maximumWidth, MarkupToolbarLayout.width(buttonCount: visible.count))
         toolbar.setFrameSize(CGSize(width: width, height: MarkupToolbarLayout.height))
         MarkupToolbarLayout.arrange(buttons: visible, dividers: toolbarDividers, width: width)
+    }
+
+    func pinDocumentToolbar(to host: NSView, inset: CGFloat) -> CGRect {
+        documentToolbarHost = host
+        toolbar.identifier = NSUserInterfaceItemIdentifier("scrollPreviewToolbar")
+        for view in [toolbar, palette, mosaicOptions] {
+            view.removeFromSuperview()
+            host.addSubview(view)
+        }
+        layoutToolbarButtons(maximumWidth: host.bounds.width - 2 * inset)
+        toolbar.setFrameOrigin(CGPoint(x: host.bounds.maxX - toolbar.frame.width - inset, y: inset))
+        refresh()
+        return toolbar.frame
+    }
+
+    func setDocumentExporting(_ exporting: Bool) {
+        documentExportInProgress = exporting
+        for button in toolbarButtons where button.action != #selector(cancel) { button.isEnabled = !exporting }
+        inkButton.isEnabled = !exporting
+        refresh()
+    }
+
+    var downloadButtonScreenFrame: CGRect? {
+        guard let button = downloadButton, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    func updateDocumentViewport() {
+        updateModeHint()
+    }
+
+    private func layoutDocumentToolbar(in host: NSView) {
+        toolbar.isHidden = false
+        mosaicOptions.setCanPickColor(canPickCoverColor)
+        palette.isHidden = !showPalette || documentExportInProgress
+        mosaicOptions.isHidden = !showMosaicOptions || tool != .mosaic || documentExportInProgress
+        let popupY = toolbar.frame.maxY + 6
+        let width = host.bounds.width
+        if !palette.isHidden {
+            let x = toolbar.frame.minX + inkButton.frame.midX - palette.frame.width / 2
+            palette.setFrameOrigin(CGPoint(x: max(5, min(x, width - palette.frame.width - 5)), y: popupY))
+        }
+        if !mosaicOptions.isHidden, let mosaicButton = toolButtons[.mosaic] {
+            let x = toolbar.frame.minX + mosaicButton.frame.midX - mosaicOptions.frame.width / 2
+            mosaicOptions.setFrameOrigin(CGPoint(x: max(5, min(x, width - mosaicOptions.frame.width - 5)), y: popupY))
+            mosaicOptions.select(mosaicStyle)
+        }
     }
 
     private func buildPalette() {
@@ -1245,34 +1379,16 @@ final class CaptureView: NSView {
         refresh()
     }
 
-    private func configure(_ button: NSButton, _ item: (symbol: String, label: UIKey), action: Selector) {
-        if let url = Bundle.main.url(forResource: item.symbol, withExtension: "svg", subdirectory: "Lucide"),
-           let image = NSImage(contentsOf: url) {
-            image.size = NSSize(width: 18, height: 18)
-            image.isTemplate = true
-            button.image = image
-        }
-        let title = strings(item.label)
-        if button.image == nil { button.title = title }
-        button.imagePosition = button.image == nil ? .noImage : .imageOnly
-        button.setAccessibilityLabel(title)
-        button.toolTip = title
-        button.isBordered = false
-        button.target = self
-        button.action = action
-        button.refusesFirstResponder = true
-        button.wantsLayer = true
-        button.layer?.cornerRadius = 6
-        switch item.symbol {
-        case "x": button.contentTintColor = .systemRed
-        case "check": button.contentTintColor = KlikTheme.accent
-        default: button.contentTintColor = KlikTheme.overlayInk
-        }
+    private func configure(_ button: HoverButton, _ item: (symbol: String, label: UIKey), action: Selector) {
+        MarkupToolbarLayout.configureButton(button, symbol: item.symbol, label: strings(item.label),
+                                            target: self, action: action)
     }
 
     private func refresh() {
         needsDisplay = true
-        if let selection, drag == nil {
+        if let host = documentToolbarHost {
+            layoutDocumentToolbar(in: host)
+        } else if let selection, !isDocument, drag == nil {
             mosaicOptions.setCanPickColor(canPickCoverColor)
             let size = toolbar.frame.size
             let x = max(5, min(selection.maxX - size.width, bounds.maxX - size.width - 5))
@@ -1307,8 +1423,8 @@ final class CaptureView: NSView {
             palette.isHidden = true
             mosaicOptions.isHidden = true
         }
-        undoButton.isEnabled = !undoMarks.isEmpty || isEditingText
-        redoButton.isEnabled = !redoMarks.isEmpty && !isEditingText
+        undoButton.isEnabled = !documentExportInProgress && (!undoMarks.isEmpty || isEditingText)
+        redoButton.isEnabled = !documentExportInProgress && !redoMarks.isEmpty && !isEditingText
         if let coach {
             if drag != nil || isEditingText || windowCaptureTask != nil || !errorLabel.isHidden {
                 coach.hide()
@@ -1321,6 +1437,22 @@ final class CaptureView: NSView {
             }
         }
         updateModeHint()
+        updateSelectionSize()
+    }
+
+    private func updateSelectionSize() {
+        guard !isDocument, recognitionView == nil, let region = draftSelection ?? selection,
+              region.width > 0, region.height > 0 else { selectionSize.isHidden = true; return }
+        let pixels = (draftSelection == nil ? background : desktop).pixelRect(for: region)
+        guard !pixels.isEmpty else { selectionSize.isHidden = true; return }
+        selectionSize.text = "\(Int(pixels.width)) x \(Int(pixels.height))"
+        let size = selectionSize.size(maximumWidth: bounds.width - 8)
+        let above = region.minY - size.height - 5
+        let fitsAbove = above >= bounds.minY + 4
+        let x = max(bounds.minX + 4, min(region.minX + (fitsAbove ? 0 : 6), bounds.maxX - size.width - 4))
+        let y = fitsAbove ? above : min(region.minY + 6, bounds.maxY - size.height - 4)
+        selectionSize.frame = CGRect(origin: CGPoint(x: x, y: y), size: size)
+        selectionSize.isHidden = false
     }
 
     private func updateModeHint() {
@@ -1329,14 +1461,16 @@ final class CaptureView: NSView {
         guard !modeHint.isHidden else { return }
         let message: UIKey = (pickingCoverColor || pickingInkColor) ? .mosaicPickPrompt : (capturingWindow ? .windowCapturePending
             : (isWindowSnapHeld ? .windowSnapActive : .windowSnapHint))
-        modeHint.stringValue = strings(message)
-        modeHint.sizeToFit()
-        let width = min(bounds.width - 16, modeHint.frame.width + 26)
-        modeHint.frame = CGRect(x: bounds.midX - width / 2, y: bounds.maxY - 46, width: width, height: 28)
+        modeHint.text = strings(message)
+        let area = isDocument ? visibleRect : bounds
+        let size = modeHint.size(maximumWidth: area.width - 16)
+        modeHint.frame = CGRect(origin: CGPoint(x: area.midX - size.width / 2, y: area.maxY - size.height - 18),
+                                size: size)
     }
 
     @objc private func pickTool(_ sender: NSButton) {
         guard !pickingCoverColor else { updateModeHint(); return }
+        guard drag == nil else { return }
         pickingCoverColor = false
         commitText()
         showPalette = false
@@ -1368,14 +1502,16 @@ final class CaptureView: NSView {
     }
 
     private func beginText(at point: CGPoint, in selection: CGRect) {
-        let x = min(point.x, max(selection.minX, selection.maxX - 52))
-        let y = min(point.y, max(selection.minY, selection.maxY - 24))
+        let area = isDocument ? selection.intersection(visibleRect) : selection
+        let x = min(point.x, max(area.minX, area.maxX - 52))
+        let y = min(point.y, max(area.minY, area.maxY - 24))
         textOrigin = CGPoint(x: x + 3, y: y + 2)
-        let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, selection.maxX - x)), height: 26))
+        let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, area.maxX - x)), height: 26))
         field.font = Mark.textFont
         field.placeholderString = strings(.textPlaceholder)
         field.isBezeled = true
         field.bezelStyle = .roundedBezel
+        KlikTheme.styleMarkupField(field)
         field.usesSingleLineMode = true
         field.lineBreakMode = .byClipping
         addSubview(field, positioned: .below, relativeTo: pointerView)
@@ -1408,12 +1544,13 @@ final class CaptureView: NSView {
         marks.append(mark)
         redoMarks.removeAll()
         switch mark {
-        case .arrow, .rectangle: selectedMark = marks.count - 1
+        case .arrow, .ellipse, .rectangle: selectedMark = marks.count - 1
         default: selectedMark = nil
         }
     }
 
     @objc func undo() {
+        guard !documentExportInProgress else { return }
         commitText()
         if let prior = undoMarks.popLast() {
             redoMarks.append(marks)
@@ -1425,7 +1562,7 @@ final class CaptureView: NSView {
     }
 
     @objc func redo() {
-        guard !isEditingText else { return }
+        guard !isEditingText, !documentExportInProgress else { return }
         if let next = redoMarks.popLast() {
             undoMarks.append(marks)
             marks = next
@@ -1438,6 +1575,21 @@ final class CaptureView: NSView {
     @objc func cancel() { finish(.cancelled) }
     @objc private func download() { export(.downloads) }
     @objc private func confirm() { export(.clipboard) }
+
+    @objc private func beginScrollCapture() {
+        guard !pickingCoverColor, !pickingInkColor, drag == nil, windowCaptureTask == nil,
+              recognitionView == nil, let selection else { return }
+        guard selection.width >= 64, selection.height >= 96 else {
+            report(strings(.scrollSelectionSmall))
+            return
+        }
+        commitText()
+        guard marks.isEmpty else {
+            report(strings(.scrollSelectionMarked))
+            return
+        }
+        startScrollCapture?(selection)
+    }
 
     @objc private func startTextRecognition() {
         guard !pickingCoverColor else { updateModeHint(); return }
@@ -1496,6 +1648,7 @@ final class CaptureView: NSView {
             self.recognitionView?.showCopiedConfirmation()
         }
         recognitionView = view
+        selectionSize.isHidden = true
         clearPointer()
         addSubview(view, positioned: .above, relativeTo: nil)
         addSubview(modeHint, positioned: .above, relativeTo: view)
@@ -1536,7 +1689,7 @@ final class CaptureView: NSView {
             var points: [CGPoint] = []
             if let index = selectedMark, marks.indices.contains(index) {
                 switch marks[index] {
-                case .rectangle(let rect, _): points = Selection.Handle.allCases.map { $0.center(in: rect) }
+                case .ellipse(let rect, _), .rectangle(let rect, _): points = Selection.Handle.allCases.map { $0.center(in: rect) }
                 case .arrow(let start, let end, _): points = [start, end]
                 default: break
                 }
@@ -1553,10 +1706,10 @@ final class CaptureView: NSView {
         if pickingCoverColor { applyCoverColor(at: point); return }
         recognitionView?.hideMosaicOptions()
         if let index = selectedMark, marks.indices.contains(index),
-           case .rectangle(let rect, _) = marks[index], let handle = Selection.Handle.hit(at: point, in: rect) {
+           let rect = marks[index].resizableBounds, let handle = Selection.Handle.hit(at: point, in: rect) {
             drag = .resizeMark(index, marks[index], handle, point, marks)
         } else if let index = selectedMark, marks.indices.contains(index),
-                  case .rectangle(let rect, _) = marks[index], rect.contains(point) {
+                  let rect = marks[index].resizableBounds, rect.contains(point) {
             drag = .moveMark(index, marks[index], point, marks)
         } else if let index = markIndex(at: point) {
             selectedMark = index
@@ -1762,12 +1915,19 @@ final class CaptureView: NSView {
     }
 
     func export(_ destination: Destination) {
-        guard drag == nil, windowCaptureTask == nil, let selection else { return }
+        guard drag == nil, windowCaptureTask == nil, !documentExportInProgress, let selection else { return }
         guard !pickingCoverColor else { updateModeHint(); NSSound.beep(); return }
         commitText()
         refresh()
-        guard let image = background.render(selection: selection, marks: marks),
-              let png = CaptureImage.png(image) else {
+        guard let image = background.render(selection: selection, marks: marks) else {
+            report(strings(.renderError))
+            return
+        }
+        if let onDocumentExport {
+            onDocumentExport(destination, image)
+            return
+        }
+        guard let png = CaptureImage.png(image) else {
             report(strings(.renderError))
             return
         }
@@ -1783,7 +1943,7 @@ final class CaptureView: NSView {
                 try saveDownload(png)
             } catch {
                 if let recognitionView { recognitionView.showSaveConfirmation(success: false) }
-                else { downloadButton?.showBriefConfirmation(symbol: "xmark", color: .systemRed) }
+                else { downloadButton?.showBriefConfirmation(symbol: "xmark", color: KlikTheme.danger) }
                 report(strings(.downloadError))
                 return
             }
@@ -1793,10 +1953,8 @@ final class CaptureView: NSView {
         if destination == .downloads {
             if let recognitionView {
                 confirmationFrame = recognitionView.saveButtonScreenFrame
-            } else if let button = downloadButton, let window = button.window {
-                confirmationFrame = window.convertToScreen(button.convert(button.bounds, to: nil))
             } else {
-                confirmationFrame = nil
+                confirmationFrame = downloadButtonScreenFrame
             }
         } else {
             confirmationFrame = nil
@@ -1806,15 +1964,19 @@ final class CaptureView: NSView {
     }
 
     private func report(_ message: String) {
+        if let onDocumentStatus {
+            onDocumentStatus(message)
+            NSSound.beep()
+            return
+        }
         if let recognitionView {
             recognitionView.showStatus(message)
             NSSound.beep()
             return
         }
-        errorLabel.stringValue = message
-        errorLabel.sizeToFit()
-        let width = min(bounds.width - 16, errorLabel.frame.width + 24)
-        errorLabel.frame = CGRect(x: bounds.midX - width / 2, y: 12, width: width, height: 27)
+        errorLabel.text = message
+        let size = errorLabel.size(maximumWidth: bounds.width - 16)
+        errorLabel.frame = CGRect(origin: CGPoint(x: bounds.midX - size.width / 2, y: 12), size: size)
         errorLabel.isHidden = false
         NSSound.beep()
     }

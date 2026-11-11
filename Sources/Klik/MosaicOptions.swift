@@ -63,14 +63,7 @@ final class MosaicOptions: NSVisualEffectView {
     init(strings: AppStrings) {
         super.init(frame: CGRect(x: 0, y: 0, width: 110, height: 36))
         identifier = NSUserInterfaceItemIdentifier("mosaicOptions")
-        material = .hudWindow; blendingMode = .withinWindow; state = .active
-        appearance = NSAppearance(named: .darkAqua)
-        wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.backgroundColor = KlikTheme.panelTint.cgColor
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.17).cgColor
-        layer?.borderWidth = 1
-        layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(self)
         for style in [MosaicStyle.pixel, .brush, .solid] {
             let button = HoverButton(frame: CGRect(x: 5 + style.rawValue * 33, y: 3, width: 33, height: 30))
             button.image = style.icon

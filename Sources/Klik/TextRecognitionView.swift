@@ -74,8 +74,8 @@ final class TextRecognitionView: NSView {
     private let refreshButton = HoverButton()
     private let refreshConfirmation = NSVisualEffectView()
     private let refreshConfirmTitle = NSTextField(labelWithString: "")
-    private let refreshConfirmCancel = NSButton()
-    private let refreshConfirmReplace = NSButton()
+    private let refreshConfirmCancel = ForestButton()
+    private let refreshConfirmReplace = ForestButton()
     private var confirmRefreshAction: (() -> Void)?
     var onCopy: ((String) -> Void)?
     var onRefresh: (() -> Void)?
@@ -97,29 +97,33 @@ final class TextRecognitionView: NSView {
         super.init(frame: frame)
         identifier = NSUserInterfaceItemIdentifier("ocrOverlay")
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.86).cgColor
+        layer?.backgroundColor = KlikTheme.overlayCanvas.withAlphaComponent(0.91).cgColor
         addSubview(imageCard)
         card.identifier = NSUserInterfaceItemIdentifier("ocrPanel")
-        card.material = .windowBackground
-        card.blendingMode = .withinWindow
-        card.state = .active
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 12
-        card.layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(card, opaque: true)
         addSubview(card)
         titleLabel.stringValue = strings(.ocrTitle)
+        titleLabel.textColor = KlikTheme.overlayInk
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         card.addSubview(titleLabel)
         statusLabel.stringValue = strings(.ocrLoading)
         statusLabel.font = .systemFont(ofSize: 12)
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = KlikTheme.overlayMuted
         statusLabel.lineBreakMode = .byTruncatingTail
         card.addSubview(statusLabel)
         scrollView.hasVerticalScroller = true
         scrollView.identifier = NSUserInterfaceItemIdentifier("ocrEditorScroll")
-        scrollView.borderType = .bezelBorder
+        scrollView.borderType = .noBorder
+        scrollView.scrollerStyle = .overlay
+        scrollView.scrollerKnobStyle = .light
         scrollView.autohidesScrollers = true
+        scrollView.backgroundColor = KlikTheme.overlayCanvas
+        KlikTheme.styleCaptureImage(scrollView)
         textView.isRichText = false
+        textView.backgroundColor = KlikTheme.overlayCanvas
+        textView.textColor = KlikTheme.overlayInk
+        textView.insertionPointColor = KlikTheme.accent
+        textView.selectedTextAttributes = [.backgroundColor: KlikTheme.buttonSelected, .foregroundColor: KlikTheme.overlayInk]
         textView.font = .systemFont(ofSize: 14)
         textView.textContainerInset = NSSize(width: 8, height: 8)
         textView.isVerticallyResizable = true
@@ -150,28 +154,21 @@ final class TextRecognitionView: NSView {
         refreshButton.identifier = NSUserInterfaceItemIdentifier("ocrRefresh")
         card.addSubview(refreshButton)
         refreshConfirmation.identifier = NSUserInterfaceItemIdentifier("ocrRefreshConfirmation")
-        refreshConfirmation.material = .popover
-        refreshConfirmation.blendingMode = .withinWindow
-        refreshConfirmation.state = .active
-        refreshConfirmation.wantsLayer = true
-        refreshConfirmation.layer?.cornerRadius = 10
-        refreshConfirmation.layer?.borderWidth = 1
-        refreshConfirmation.layer?.borderColor = NSColor.separatorColor.cgColor
-        refreshConfirmation.layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(refreshConfirmation, radius: KlikTheme.badgeRadius, opaque: true)
         refreshConfirmation.isHidden = true
         refreshConfirmTitle.stringValue = strings(.ocrReplaceTitle)
+        refreshConfirmTitle.textColor = KlikTheme.overlayInk
         refreshConfirmTitle.font = .systemFont(ofSize: 13, weight: .semibold)
         refreshConfirmTitle.alignment = .center
         refreshConfirmTitle.lineBreakMode = .byTruncatingTail
         refreshConfirmation.addSubview(refreshConfirmTitle)
         refreshConfirmCancel.title = strings(.cancel)
-        refreshConfirmCancel.bezelStyle = .rounded
         refreshConfirmCancel.identifier = NSUserInterfaceItemIdentifier("ocrRefreshCancel")
         refreshConfirmCancel.target = self
         refreshConfirmCancel.action = #selector(cancelRefreshConfirmation)
         refreshConfirmation.addSubview(refreshConfirmCancel)
         refreshConfirmReplace.title = strings(.ocrReplaceButton)
-        refreshConfirmReplace.bezelStyle = .rounded
+        refreshConfirmReplace.isPrimary = true
         refreshConfirmReplace.identifier = NSUserInterfaceItemIdentifier("ocrRefreshReplace")
         refreshConfirmReplace.target = self
         refreshConfirmReplace.action = #selector(confirmRefresh)
@@ -252,18 +249,9 @@ final class TextRecognitionView: NSView {
 
     private func buildMarkupToolbar() {
         markupToolbar.identifier = NSUserInterfaceItemIdentifier("ocrMarkupToolbar")
-        markupToolbar.material = .hudWindow
-        markupToolbar.blendingMode = .withinWindow
-        markupToolbar.state = .active
-        markupToolbar.appearance = NSAppearance(named: .darkAqua)
-        markupToolbar.wantsLayer = true
-        markupToolbar.layer?.cornerRadius = 12
-        markupToolbar.layer?.backgroundColor = KlikTheme.panelTint.cgColor
-        markupToolbar.layer?.borderColor = NSColor.white.withAlphaComponent(0.17).cgColor
-        markupToolbar.layer?.borderWidth = 1
-        markupToolbar.layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(markupToolbar)
         addSubview(markupToolbar)
-        let fallbacks = ["rectangle", "arrow.up.right", "pencil", "textformat", "square.grid.3x3"]
+        let fallbacks = ["circle", "rectangle", "arrow.up.right", "pencil", "textformat", "square.grid.3x3"]
         for (index, tool) in Tool.allCases.enumerated() {
             let button = HoverButton()
             let item = tool.item
@@ -274,7 +262,7 @@ final class TextRecognitionView: NSView {
             button.action = #selector(selectMarkupTool(_:))
             button.tag = index
             button.wantsLayer = true
-            button.layer?.cornerRadius = 6
+            KlikTheme.round(button.layer, radius: KlikTheme.controlRadius, clips: false)
             markupButtons.append(button)
             markupToolbar.addSubview(button)
         }
@@ -295,12 +283,12 @@ final class TextRecognitionView: NSView {
         markupToolbar.addSubview(markupRedo)
         for divider in toolbarDividers {
             divider.wantsLayer = true
-            divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            divider.layer?.backgroundColor = KlikTheme.overlayDivider.cgColor
             markupToolbar.addSubview(divider)
         }
         markupToolbar.addSubview(saveButton)
         configureIcon(cancelButton, symbol: "x", fallback: "xmark", label: strings(.ocrCancel))
-        cancelButton.contentTintColor = .systemRed
+        cancelButton.contentTintColor = KlikTheme.danger
         cancelButton.toolTip = strings(.ocrCancel)
         cancelButton.identifier = NSUserInterfaceItemIdentifier("ocrCancel")
         cancelButton.target = self; cancelButton.action = #selector(cancelCapture)
@@ -311,17 +299,8 @@ final class TextRecognitionView: NSView {
         confirmButton.identifier = NSUserInterfaceItemIdentifier("ocrConfirm")
         confirmButton.target = self; confirmButton.action = #selector(confirmCapture)
         markupToolbar.addSubview(confirmButton)
-        palette.material = .hudWindow
-        palette.blendingMode = .withinWindow
-        palette.state = .active
-        palette.appearance = NSAppearance(named: .darkAqua)
-        palette.wantsLayer = true
-        palette.layer?.cornerRadius = 12
-        palette.layer?.backgroundColor = KlikTheme.panelTint.cgColor
-        palette.layer?.borderColor = NSColor.white.withAlphaComponent(0.17).cgColor
-        palette.layer?.borderWidth = 1
-        palette.layer?.masksToBounds = true
         palette.identifier = NSUserInterfaceItemIdentifier("ocrColorPalette")
+        MarkupToolbarLayout.styleTray(palette)
         palette.isHidden = true
         addSubview(palette)
         for (index, ink) in Ink.allCases.enumerated() {
@@ -386,7 +365,7 @@ final class TextRecognitionView: NSView {
         button.image = image
         button.imagePosition = .imageOnly
         button.isBordered = false
-        button.contentTintColor = .labelColor
+        button.contentTintColor = KlikTheme.overlayInk
         button.setAccessibilityLabel(label)
     }
 
@@ -440,7 +419,7 @@ final class TextRecognitionView: NSView {
     }
 
     func showCopiedConfirmation() {
-        copyButton.showBriefConfirmation(symbol: "checkmark", color: .systemGreen)
+        copyButton.showBriefConfirmation(symbol: "checkmark", color: KlikTheme.accent)
         copyButton.setAccessibilityHelp(strings(.ocrCopied))
     }
 
@@ -451,7 +430,7 @@ final class TextRecognitionView: NSView {
 
     func showSaveConfirmation(success: Bool) {
         saveButton.showBriefConfirmation(symbol: success ? "checkmark" : "xmark",
-                                         color: success ? KlikTheme.accent : .systemRed)
+                                         color: success ? KlikTheme.accent : KlikTheme.danger)
     }
 
     var hasUserEdits: Bool {
@@ -462,7 +441,7 @@ final class TextRecognitionView: NSView {
     func preserveEditedTextForChangedImage(isDrawing: Bool) -> Bool {
         guard hasUserEdits else { return false }
         editedTextNeedsReview = true
-        statusLabel.textColor = .systemRed
+        statusLabel.textColor = KlikTheme.danger
         statusLabel.stringValue = strings(.ocrEditedImageChanged)
         statusLabel.toolTip = statusLabel.stringValue
         statusLabel.isHidden = false
@@ -478,7 +457,7 @@ final class TextRecognitionView: NSView {
         textView.isEditable = !text.isEmpty
         copyButton.isEnabled = !text.isEmpty
         refreshButton.isEnabled = true
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = KlikTheme.overlayMuted
         statusLabel.toolTip = nil
         statusLabel.stringValue = text.isEmpty ? emptyMessage : ""
         statusLabel.isHidden = !text.isEmpty
@@ -493,7 +472,7 @@ final class TextRecognitionView: NSView {
         textView.isEditable = false
         copyButton.isEnabled = false
         refreshButton.isEnabled = false
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = KlikTheme.overlayMuted
         statusLabel.toolTip = nil
         statusLabel.stringValue = strings(.ocrLoading)
         statusLabel.isHidden = false
@@ -501,7 +480,7 @@ final class TextRecognitionView: NSView {
     }
 
     func showError(_ message: String, preservingText: Bool = false) {
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = KlikTheme.overlayMuted
         statusLabel.toolTip = nil
         statusLabel.stringValue = message
         statusLabel.isHidden = false
@@ -513,7 +492,7 @@ final class TextRecognitionView: NSView {
     }
 
     func showStatus(_ message: String) {
-        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.textColor = KlikTheme.overlayMuted
         statusLabel.toolTip = nil
         statusLabel.stringValue = message
         statusLabel.isHidden = false

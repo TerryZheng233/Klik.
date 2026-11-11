@@ -2,6 +2,24 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.21 — 2026-11-11
+
+**English**
+
+- Capture long and wide screenshots by scrolling vertically or horizontally. Klik. stitches the view as you scroll, even when you reverse direction on the same axis.
+- Annotate stitched screenshots before copying or saving at full resolution. The Circle tool is also available in regular captures and the OCR view.
+- Use the new olive-and-cream palette across the app. The scrolling capture prompt follows the Mac’s light or dark appearance.
+- Hold Shift while selecting to capture a square. The selection shows its live pixel dimensions in the top-left corner.
+- Clear screenshot history directly in the menu by clicking **Clear All**, then the red **Confirm** button.
+
+**简体中文**
+
+- 支持纵向和横向滚动截长图。Klik. 会边滚动边拼接，也支持在同一轴上反向滚动。
+- 可在复制或保存前直接标注长图，保留原始像素尺寸。普通截图和 OCR 界面也新增了圆形标注工具。
+- 全应用采用橄榄绿与奶油白配色，滚动截图提示窗跟随 Mac 的浅色或深色外观。
+- 按住 Shift 可框选正方形，选区左上角会实时显示像素尺寸。
+- 在历史菜单里点击「**清空**」，再点红色「**确认**」，即可清空截图记录。
+
 ## 0.1.20 — 2026-11-10
 
 **English**

@@ -4,8 +4,9 @@ import ScreenCaptureKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let preferences = KlikPreferences()
     private let mosaicScrollHintPolicy = MosaicScrollHintPolicy(defaults: .standard)
-    private let history = CaptureHistory()
+    private let history: CaptureHistory
     private var historyIssue = false
+    private weak var pendingHistoryClear: ForestButton?
     private var previewURL: URL?
     private var statusItem: NSStatusItem?
     private let statusPopover = NSPopover()
@@ -14,14 +15,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var setup: ShortcutSetup?
     private var captureTask: Task<Void, Never>?
     private var overlay: CapturePanel?
+    private var scrollCapture: ScrollCaptureSession?
     private var screenPanels: [CapturePanel] = []
     private var mouseMonitors: [Any] = []
     private var previousForegroundApp: NSRunningApplication?
     private var presentingAlert = false
 
+    init(history: CaptureHistory = CaptureHistory()) {
+        self.history = history
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         history.limit = preferences.historyLimit
         do { try history.enforceLimit() } catch { historyIssue = true }
+        installStatusItem()
+        var shortcutIssue: Error?
+        do {
+            try enableShortcut(preferences.shortcut)
+        } catch {
+            shortcutIssue = error
+        }
+        if preferences.savedShortcut == nil || shortcutIssue != nil {
+            showSetup(issue: shortcutIssue)
+        }
+        UpdateStartup.confirmAfterStartup()
+    }
+
+    func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         let icon = NSImage(size: NSSize(width: 19, height: 18), flipped: false) { _ in
             let text = "k." as NSString
@@ -41,16 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusPopover.delegate = self
         statusPopover.animates = false
         statusItem = item
-        var shortcutIssue: Error?
-        do {
-            try enableShortcut(preferences.shortcut)
-        } catch {
-            shortcutIssue = error
-        }
-        if preferences.savedShortcut == nil || shortcutIssue != nil {
-            showSetup(issue: shortcutIssue)
-        }
-        UpdateStartup.confirmAfterStartup()
     }
 
     @MainActor @objc private func toggleStatusPopover() {
@@ -59,9 +70,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
         guard let button = statusItem?.button else { return }
+        showStatusPopover(relativeTo: button)
+    }
+
+    @MainActor
+    @discardableResult
+    func showStatusPopover(relativeTo anchor: NSView) -> NSPopover {
         refreshStatusPopover()
-        statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        statusPopover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         if statusPopover.isShown { watchForOutsideClicks() }
+        return statusPopover
     }
 
     @MainActor
@@ -89,11 +107,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        pendingHistoryClear = nil
         stopWatchingForOutsideClicks()
     }
 
     @MainActor
     private func refreshStatusPopover() {
+        pendingHistoryClear = nil
         let strings = preferences.strings
         let entries: [URL]
         do {
@@ -107,18 +127,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let visibleRows = min(max(entries.count, 1), 5)
         let listHeight = CGFloat(visibleRows * 52)
         let width: CGFloat = 300
-        let height = listHeight + 130
+        let height = listHeight + 98
         let content = StatusPopoverView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        content.isSurface = true
         let title = NSTextField(labelWithString: strings(historyIssue ? .historyErrorTitle : .menuHistory))
         title.font = .systemFont(ofSize: 14, weight: .semibold)
-        title.frame = NSRect(x: 16, y: 12, width: 200, height: 22)
+        title.textColor = KlikTheme.ink
+        title.frame = NSRect(x: 16, y: 12, width: width - 116, height: 22)
+        if historyIssue { title.toolTip = strings(.historyErrorBody) }
         content.addSubview(title)
 
-        let clear = NSButton(title: strings(.menuHistoryClear), target: self, action: #selector(clearHistory))
-        clear.bezelStyle = .inline
+        let clear = ForestButton(title: strings(.menuHistoryClear), target: self, action: #selector(clearHistory(_:)))
         clear.isEnabled = !entries.isEmpty
-        clear.sizeToFit()
-        clear.frame.origin = NSPoint(x: width - clear.frame.width - 14, y: 12)
+        clear.frame = CGRect(x: width - 92, y: 10, width: 76, height: 26)
         content.addSubview(clear)
 
         let scroll = NSScrollView(frame: NSRect(x: 12, y: 40, width: width - 24, height: listHeight))
@@ -128,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                                                   height: max(listHeight, CGFloat(entries.count * 52))))
         if entries.isEmpty {
             let message = NSTextField(labelWithString: strings(historyIssue ? .historyErrorTitle : .menuHistoryEmpty))
-            message.textColor = .secondaryLabelColor
+            message.textColor = KlikTheme.mutedInk
             message.frame = NSRect(x: 5, y: 11, width: width - 34, height: 22)
             list.addSubview(message)
         }
@@ -143,13 +164,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         scroll.documentView = list
         content.addSubview(scroll)
 
-        let settings = NSButton(title: strings(.menuSettings), target: self, action: #selector(openSettings))
-        settings.bezelStyle = .rounded
+        let settings = ForestButton(title: strings(.menuSettings), target: self, action: #selector(openSettings))
         let buttonWidth = (width - 32 - 8) / 2
         settings.frame = NSRect(x: 16, y: listHeight + 56, width: buttonWidth, height: 28)
         content.addSubview(settings)
-        let quit = NSButton(title: strings(.menuQuit), target: NSApp, action: #selector(NSApplication.terminate(_:)))
-        quit.bezelStyle = .rounded
+        let quit = ForestButton(title: strings(.menuQuit), target: NSApp, action: #selector(NSApplication.terminate(_:)))
         quit.frame = NSRect(x: 16 + buttonWidth + 8, y: listHeight + 56, width: buttonWidth, height: 28)
         content.addSubview(quit)
         let controller = NSViewController()
@@ -176,31 +195,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         previewURL = sender.url
         let strings = preferences.strings
         let content = StatusPopoverView(frame: NSRect(x: 0, y: 0, width: 360, height: 330))
-        let back = NSButton(title: "‹  " + strings(.back), target: self, action: #selector(backToHistory))
-        back.bezelStyle = .inline
-        back.sizeToFit()
-        back.frame.origin = NSPoint(x: 14, y: 12)
+        content.isSurface = true
+        let back = ForestButton(title: "‹  " + strings(.back), target: self, action: #selector(backToHistory))
+        back.frame = CGRect(x: 16, y: 10, width: 76, height: 26)
         content.addSubview(back)
         let title = NSTextField(labelWithString: strings(.historyPreview))
         title.font = .systemFont(ofSize: 14, weight: .semibold)
+        title.textColor = KlikTheme.ink
         title.alignment = .center
         title.frame = NSRect(x: 115, y: 14, width: 130, height: 20)
         content.addSubview(title)
-        let imageView = NSImageView(frame: NSRect(x: 16, y: 44, width: 328, height: 220))
+        let imageView = PassiveImageView(frame: NSRect(x: 16, y: 44, width: 328, height: 220))
         imageView.image = image
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.wantsLayer = true
-        imageView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        imageView.layer?.cornerRadius = 8
-        imageView.layer?.masksToBounds = true
+        imageView.styleHistoryImage(radius: KlikTheme.badgeRadius)
         content.addSubview(imageView)
         let date = NSTextField(labelWithString: HistoryDateFormatter.label(for: sender.url, strings: strings))
-        date.textColor = .secondaryLabelColor
+        date.textColor = KlikTheme.mutedInk
         date.font = .systemFont(ofSize: 12)
         date.frame = NSRect(x: 18, y: 280, width: 220, height: 22)
         content.addSubview(date)
-        let copy = NSButton(title: strings(.historyCopy), target: self, action: #selector(copyHistory))
-        copy.bezelStyle = .rounded
+        let copy = ForestButton(title: strings(.historyCopy), target: self, action: #selector(copyHistory))
+        copy.isPrimary = true
         copy.frame = NSRect(x: 246, y: 275, width: 98, height: 30)
         content.addSubview(copy)
         let controller = NSViewController()
@@ -221,33 +237,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    @MainActor @objc private func clearHistory() {
-        let strings = preferences.strings
-        let previous = NSWorkspace.shared.frontmostApplication
-        statusPopover.performClose(nil)
-        presentingAlert = true
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = strings(.historyClearTitle)
-        alert.informativeText = strings(.historyClearBody)
-        alert.addButton(withTitle: strings(.cancel))
-        alert.addButton(withTitle: strings(.menuHistoryClear))
-        NSApp.activate()
-        let confirmed = alert.runModal() == .alertSecondButtonReturn
-        presentingAlert = false
-        if confirmed {
-            do {
-                try history.clear()
-                historyIssue = false
-            } catch {
-                showAlert(strings(.historyErrorTitle), strings(.historyErrorBody))
-            }
+    @MainActor @objc private func clearHistory(_ sender: ForestButton) {
+        guard statusPopover.isShown, sender.isEnabled,
+              let content = statusPopover.contentViewController?.view, sender.superview === content else { return }
+        if pendingHistoryClear !== sender {
+            pendingHistoryClear = sender
+            let strings = preferences.strings
+            let hint = strings(.menuHistoryConfirmClearHint)
+            sender.title = strings(.menuHistoryConfirmClear)
+            sender.toolTip = hint
+            sender.setAccessibilityHelp(hint)
+            sender.isDestructive = true
+            return
         }
-        if ownsForeground, let previous, previous.processIdentifier != NSRunningApplication.current.processIdentifier,
-           !previous.isTerminated {
-            NSApp.yieldActivation(to: previous)
-            previous.activate(from: .current, options: [])
+        do {
+            try history.clear()
+            historyIssue = false
+        } catch {
+            historyIssue = true
         }
+        refreshStatusPopover()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -271,7 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @MainActor
     private func handleCaptureShortcut() {
-        guard overlay == nil, captureTask == nil, !presentingAlert else { return }
+        guard overlay == nil, scrollCapture == nil, captureTask == nil, !presentingAlert else { return }
         if setup == nil, preferences.savedShortcut == nil { showSetup() }
         if setup?.handleRegisteredShortcut(preferences.shortcut) == true { return }
         beginCapture()
@@ -313,13 +322,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         controller.present()
     }
 
+    @MainActor
     func applicationDidResignActive(_ notification: Notification) {
         if captureTask == nil, overlay?.isVisible == true { closeCapture(restoreFocus: false) }
     }
 
     @MainActor
     private func beginCapture(practice: ShortcutSetup? = nil) {
-        guard overlay == nil, captureTask == nil, !presentingAlert else { return }
+        guard overlay == nil, scrollCapture == nil, captureTask == nil, !presentingAlert else { return }
         let strings = preferences.strings
 
         if !CGPreflightScreenCaptureAccess(), !CGRequestScreenCaptureAccess() {
@@ -332,6 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 : strings(.practicePermissionBody)
             alert.addButton(withTitle: strings(.openSystemSettings))
             alert.addButton(withTitle: strings(.cancel))
+            KlikTheme.styleAlert(alert)
             if alert.runModal() == .alertFirstButtonReturn,
                let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                 NSWorkspace.shared.open(settings)
@@ -399,6 +410,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                             targets.insert(WindowSnap(id: 0, frame: local, usesDesktopImage: true), at: 0)
                         }
                     }
+                    let scrollAction: ((CGRect) -> Void)? = practice == nil ? { [weak self] selection in
+                        self?.beginScrollCapture(selection: selection, displayID: display.id,
+                                                 frame: display.frame, scale: display.scale, strings: strings)
+                    } : nil
                     let panel = CapturePanel(frame: display.frame, image: snapshot.image, windowTargets: targets,
                                              strings: strings, guided: practice != nil,
                                              scrollHintPolicy: self.mosaicScrollHintPolicy,
@@ -407,15 +422,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                                                      guard let window = windows[id] else { throw CaptureError.displayChanged }
                                                      return try await Self.snapshot(window: window)
                                                  }
-                                             }, recordCapture: { [weak self] png in
-                                                 guard let self else { return }
-                                                 do {
-                                                     try self.history.record(png)
-                                                     self.historyIssue = false
-                                                 } catch {
-                                                     self.historyIssue = true
-                                                 }
-                                             }) {
+                                             }, startScrollCapture: scrollAction,
+                                             recordCapture: { [weak self] png in self?.recordCapture(png) }) {
                         [weak self, weak practice] outcome in
                         self?.closeCapture(restoreFocus: practice == nil)
                         practice?.returnFromPractice(outcome)
@@ -523,24 +531,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
 
+    @MainActor
+    private func beginScrollCapture(selection: CGRect, displayID: CGDirectDisplayID, frame: CGRect,
+                                    scale: CGFloat, strings: AppStrings) {
+        guard overlay != nil, scrollCapture == nil else { return }
+        guard let screen = NSScreen.screens.first(where: {
+            $0.frame == frame && $0.backingScaleFactor == scale
+                && ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
+        }) else {
+            closeCapture()
+            showAlert(strings(.captureFailed), strings(.displayChanged))
+            return
+        }
+
+        let session = ScrollCaptureSession(selection: selection, screenFrame: frame, visibleFrame: screen.visibleFrame,
+                                           strings: strings, record: { [weak self] in self?.recordCapture($0) },
+                                           finish: { [weak self] in self?.closeCapture() })
+        scrollCapture = session
+        hideCapturePanels()
+        restoreCaptureFocus(to: previousForegroundApp)
+        session.start { windowIDs in
+            try await ScrollFrameSource.make(displayID: displayID, screenFrame: frame,
+                                             scale: scale, selection: selection, excluding: windowIDs)
+        }
+    }
+
+    private func recordCapture(_ png: Data) {
+        do {
+            try history.record(png)
+            historyIssue = false
+        } catch {
+            historyIssue = true
+        }
+    }
+
     private var ownsForeground: Bool {
         NSWorkspace.shared.frontmostApplication?.processIdentifier == NSRunningApplication.current.processIdentifier
     }
 
+    @MainActor
     private func closeCapture(restoreFocus: Bool = true) {
         let returnTo = previousForegroundApp
         previousForegroundApp = nil
+        hideCapturePanels()
+        scrollCapture?.close()
+        scrollCapture = nil
+        if restoreFocus { restoreCaptureFocus(to: returnTo) }
+    }
+
+    private func hideCapturePanels() {
         mouseMonitors.forEach { NSEvent.removeMonitor($0) }
         mouseMonitors.removeAll()
         overlay?.orderOut(nil)
         overlay = nil
         screenPanels.removeAll()
-        if restoreFocus, ownsForeground, let returnTo, !returnTo.isTerminated {
-            NSApp.yieldActivation(to: returnTo)
-            returnTo.activate(from: .current, options: [])
-        }
     }
 
+    private func restoreCaptureFocus(to app: NSRunningApplication?) {
+        guard ownsForeground, let app, !app.isTerminated else { return }
+        NSApp.yieldActivation(to: app)
+        app.activate(from: .current, options: [])
+    }
+
+    @MainActor
     private func showAlert(_ title: String, _ detail: String) {
         presentingAlert = true
         defer { presentingAlert = false }
@@ -549,6 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         alert.messageText = title
         alert.informativeText = detail
         alert.addButton(withTitle: preferences.strings(.ok))
+        KlikTheme.styleAlert(alert)
         alert.runModal()
     }
 }
@@ -561,10 +615,23 @@ enum CaptureFocus {
 }
 
 private final class StatusPopoverView: NSView {
+    var isSurface = false
     override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if isSurface {
+            KlikTheme.window.setFill()
+            dirtyRect.fill()
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
-private final class HistoryButton: NSButton {
+private final class HistoryButton: HoverButton {
     let url: URL
 
     init(frame: NSRect, url: URL, image: NSImage?, label: String) {
@@ -576,13 +643,11 @@ private final class HistoryButton: NSButton {
         let thumbnail = PassiveImageView(frame: NSRect(x: 6, y: 5, width: 52, height: 40))
         thumbnail.image = image
         thumbnail.imageScaling = .scaleProportionallyUpOrDown
-        thumbnail.wantsLayer = true
-        thumbnail.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        thumbnail.layer?.cornerRadius = 5
-        thumbnail.layer?.masksToBounds = true
+        thumbnail.styleHistoryImage(radius: KlikTheme.controlRadius)
         addSubview(thumbnail)
         let text = PassiveTextField(labelWithString: label)
         text.font = .systemFont(ofSize: 13)
+        text.textColor = KlikTheme.ink
         text.frame = NSRect(x: 70, y: 16, width: frame.width - 76, height: 18)
         addSubview(text)
     }
@@ -592,6 +657,25 @@ private final class HistoryButton: NSButton {
 
 private final class PassiveImageView: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func styleHistoryImage(radius: CGFloat) {
+        wantsLayer = true
+        KlikTheme.round(layer, radius: radius)
+        layer?.borderWidth = 1
+        updateColors()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateColors()
+    }
+
+    private func updateColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = KlikTheme.inset.cgColor
+            layer?.borderColor = KlikTheme.outline.cgColor
+        }
+    }
 }
 
 private final class PassiveTextField: NSTextField {

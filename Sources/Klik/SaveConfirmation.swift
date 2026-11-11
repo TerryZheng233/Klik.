@@ -18,13 +18,7 @@ enum SaveConfirmation {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.isReleasedWhenClosed = false
         let background = NSVisualEffectView(frame: CGRect(origin: .zero, size: frame.size))
-        background.material = .hudWindow
-        background.blendingMode = .withinWindow
-        background.state = .active
-        background.appearance = NSAppearance(named: .darkAqua)
-        background.wantsLayer = true
-        background.layer?.cornerRadius = 6
-        background.layer?.masksToBounds = true
+        MarkupToolbarLayout.styleTray(background, radius: KlikTheme.controlRadius)
         let icon = NSImageView(frame: background.bounds.insetBy(dx: (frame.width - 18) / 2,
                                                                  dy: (frame.height - 18) / 2))
         icon.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
@@ -34,15 +28,25 @@ enum SaveConfirmation {
         panel.contentView = background
         let id = UUID()
         visible[id] = panel
-        panel.alphaValue = 0
+        let duration = KlikTheme.transitionDuration
+        panel.alphaValue = duration > 0 ? 0 : 1
         panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.12
-            panel.animator().alphaValue = 1
+        if duration > 0 {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard duration > 0 else {
+                panel.orderOut(nil)
+                visible.removeValue(forKey: id)
+                return
+            }
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.16
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 panel.animator().alphaValue = 0
             }, completionHandler: {
                 Task { @MainActor in

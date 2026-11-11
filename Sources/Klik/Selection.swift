@@ -8,6 +8,18 @@ enum Selection {
                width: abs(start.x - end.x), height: abs(start.y - end.y))
     }
 
+    static func square(from start: CGPoint, to end: CGPoint, in bounds: CGRect) -> CGRect {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let left = dx == 0 ? start.x > bounds.midX : dx < 0
+        let up = dy == 0 ? start.y > bounds.midY : dy < 0
+        let spaceX = left ? start.x - bounds.minX : bounds.maxX - start.x
+        let spaceY = up ? start.y - bounds.minY : bounds.maxY - start.y
+        let side = max(0, min(max(abs(dx), abs(dy)), spaceX, spaceY))
+        return CGRect(x: left ? start.x - side : start.x, y: up ? start.y - side : start.y,
+                      width: side, height: side)
+    }
+
     static func move(_ rect: CGRect, from start: CGPoint, to end: CGPoint, in bounds: CGRect) -> CGRect {
         let x = min(max(rect.minX + end.x - start.x, bounds.minX), bounds.maxX - rect.width)
         let y = min(max(rect.minY + end.y - start.y, bounds.minY), bounds.maxY - rect.height)
@@ -52,6 +64,24 @@ enum Selection {
             if vertical == 0 { top = min(max(top + delta.y, bounds.minY), bottom - Selection.minimum) }
             if vertical == 1 { bottom = max(min(bottom + delta.y, bounds.maxY), top + Selection.minimum) }
             return CGRect(x: left, y: top, width: right - left, height: bottom - top)
+        }
+
+        func resizeSquare(_ rect: CGRect, delta: CGPoint, in bounds: CGRect, minimum: CGFloat) -> CGRect {
+            let xDirection = horizontal * 2 - 1
+            let yDirection = vertical * 2 - 1
+            let anchorX = xDirection < 0 ? rect.maxX : xDirection > 0 ? rect.minX : rect.midX
+            let anchorY = yDirection < 0 ? rect.maxY : yDirection > 0 ? rect.minY : rect.midY
+            let width = xDirection == 0 ? 0 : rect.width + delta.x * xDirection
+            let height = yDirection == 0 ? 0 : rect.height + delta.y * yDirection
+            let spaceX = xDirection < 0 ? anchorX - bounds.minX : xDirection > 0 ? bounds.maxX - anchorX : bounds.width
+            let spaceY = yDirection < 0 ? anchorY - bounds.minY : yDirection > 0 ? bounds.maxY - anchorY : bounds.height
+            let side = max(0, min(max(minimum, width, height), spaceX, spaceY))
+            // A side handle grows around the center on the perpendicular axis.
+            let centerX = min(bounds.maxX - side, max(bounds.minX, (anchorX - side / 2).rounded()))
+            let centerY = min(bounds.maxY - side, max(bounds.minY, (anchorY - side / 2).rounded()))
+            return CGRect(x: xDirection == 0 ? centerX : xDirection < 0 ? anchorX - side : anchorX,
+                          y: yDirection == 0 ? centerY : yDirection < 0 ? anchorY - side : anchorY,
+                          width: side, height: side)
         }
 
         static func hit(at point: CGPoint, in rect: CGRect, retaining previous: Handle? = nil) -> Handle? {

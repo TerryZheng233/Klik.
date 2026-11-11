@@ -128,7 +128,7 @@ final class TextRecognitionTests: XCTestCase {
         let warning = try XCTUnwrap(descendants(overlay).compactMap { $0 as? NSTextField }.first {
             !$0.isHidden && $0.stringValue == strings(.ocrEditedImageChanged)
         })
-        XCTAssertEqual(warning.textColor, NSColor.systemRed)
+        XCTAssertEqual(warning.textColor, KlikTheme.danger)
         try XCTUnwrap(tools.subviews.compactMap { $0 as? NSButton }
             .first { $0.toolTip == strings(.toolUndo) }).performClick(nil)
         XCTAssertEqual(editor.string, "My edited result")

@@ -12,6 +12,7 @@ final class HoverButtonTests: XCTestCase {
                                                      eventNumber: 0, clickCount: 0, pressure: 0))
         button.mouseEntered(with: event)
         XCTAssertGreaterThan(try XCTUnwrap(button.layer).shadowOpacity, 0)
+        XCTAssertEqual(button.layer?.cornerCurve, .continuous)
         button.toolSelected = true
         XCTAssertEqual(button.layer?.backgroundColor, KlikTheme.buttonSelected.cgColor)
         button.mouseExited(with: event)

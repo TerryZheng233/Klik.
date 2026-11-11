@@ -22,10 +22,10 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
 
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let shape = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        let shape = NSBezierPath(roundedRect: rect, xRadius: KlikTheme.controlRadius, yRadius: KlikTheme.controlRadius)
         KlikTheme.keycap.setFill()
         shape.fill()
-        (window?.firstResponder === self ? KlikTheme.selection : NSColor.separatorColor).setStroke()
+        (window?.firstResponder === self ? KlikTheme.action : KlikTheme.outline).setStroke()
         shape.lineWidth = 1
         shape.stroke()
         let title = (selectedItem?.title ?? "") as NSString
@@ -35,7 +35,7 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
         let textHeight = title.size(withAttributes: [.font: font]).height
         title.draw(in: CGRect(x: 9, y: (bounds.height - textHeight) / 2,
                               width: max(0, bounds.width - 30), height: textHeight + 2),
-                   withAttributes: [.font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: style])
+                   withAttributes: [.font: font, .foregroundColor: KlikTheme.ink, .paragraphStyle: style])
         let x = bounds.maxX - 12
         let y = bounds.midY
         let chevrons = NSBezierPath()
@@ -48,7 +48,7 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
         chevrons.move(to: NSPoint(x: x - 3, y: y + 1.5))
         chevrons.line(to: NSPoint(x: x, y: y + 4.5))
         chevrons.line(to: NSPoint(x: x + 3, y: y + 1.5))
-        NSColor.labelColor.setStroke()
+        KlikTheme.ink.setStroke()
         chevrons.stroke()
     }
 
@@ -140,6 +140,16 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
 
 private final class FlippedPickerView: NSView {
     override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        KlikTheme.card.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: KlikTheme.badgeRadius, yRadius: KlikTheme.badgeRadius).fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
 private final class ForestPickerRow: NSButton {
@@ -173,12 +183,12 @@ private final class ForestPickerRow: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         if hovered || isHighlighted || isKeyboardHighlighted {
-            KlikTheme.keycap.setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5).fill()
+            KlikTheme.hover.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: KlikTheme.controlRadius, yRadius: KlikTheme.controlRadius).fill()
         }
         let text = (isChosen ? "✓  " : "    ") + title
         (text as NSString).draw(in: bounds.insetBy(dx: 8, dy: 5), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.labelColor
+            .font: NSFont.systemFont(ofSize: 13), .foregroundColor: isChosen ? KlikTheme.action : KlikTheme.ink
         ])
     }
 }

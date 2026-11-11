@@ -52,6 +52,7 @@ enum UIKey: String, CaseIterable {
     case practiceSelectDetail
     case practiceStep
     case practiceHideTips
+    case practiceEllipse
     case practiceRectangle
     case practiceArrow
     case practicePen
@@ -104,6 +105,7 @@ enum UIKey: String, CaseIterable {
     case captureFailed
     case displayChanged
     case overlayFocus
+    case toolEllipse
     case toolRectangle
     case toolArrow
     case toolPen
@@ -115,6 +117,21 @@ enum UIKey: String, CaseIterable {
     case mosaicPickColor
     case mosaicPickPrompt
     case toolRecognizeText
+    case toolScrollCapture
+    case scrollSelectionSmall
+    case scrollSelectionMarked
+    case scrollStarting
+    case scrollReady
+    case scrollProgress
+    case scrollProgressWide
+    case scrollUnaligned
+    case scrollLimit
+    case scrollFinishing
+    case scrollPartial
+    case scrollSourceFailed
+    case scrollPreviewTitle
+    case scrollDimensions
+    case scrollMosaicHint
     case ocrTitle
     case ocrLoading
     case ocrEditedImageChanged
@@ -153,8 +170,8 @@ enum UIKey: String, CaseIterable {
     case menuHistory
     case menuHistoryEmpty
     case menuHistoryClear
-    case historyClearTitle
-    case historyClearBody
+    case menuHistoryConfirmClear
+    case menuHistoryConfirmClearHint
     case historyToday
     case historyYesterday
     case historyPreview

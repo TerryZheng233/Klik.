@@ -38,6 +38,7 @@
 "captureFailed" = "Couldn’t capture the screen";
 "displayChanged" = "The display configuration changed. Try capturing again.";
 "overlayFocus" = "Klik. couldn’t focus the capture overlay. Try capturing again.";
+"toolEllipse" = "Ellipse";
 "toolRectangle" = "Rectangle";
 "toolArrow" = "Arrow";
 "toolPen" = "Pen";
@@ -71,6 +72,7 @@
 "practiceSelectDetail" = "Hold Space to highlight a window, then click to select it.";
 "practiceStep" = "%d / %d";
 "practiceHideTips" = "Hide Tips";
+"practiceEllipse" = "Drag to draw an ellipse. Hold Shift for a circle.";
 "practiceRectangle" = "Drag inside your selection to frame a detail.";
 "practiceArrow" = "Drag from the tail to the tip to point at a detail.";
 "practicePen" = "Draw a freehand line inside the selection.";
@@ -82,7 +84,7 @@
 "practiceDownload" = "Save a PNG to the selected folder and finish the capture.";
 "practiceCancel" = "Discard this capture and return to the guide. Esc does the same.";
 "practiceConfirm" = "Copy to the clipboard and finish. Enter does the same.";
-"windowSnapHint" = "Hold Space  ·  Select a window";
+"windowSnapHint" = "Hold space to select a window";
 "windowSnapActive" = "Click a window to select it  ·  Release Space to go back";
 "windowCapturePending" = "Capturing window…";
 "windowCaptureFailed" = "Couldn’t capture this window. Select it again or drag to capture the screen.";
@@ -90,8 +92,8 @@
 "menuHistory" = "Recent Screenshots";
 "menuHistoryEmpty" = "No recent screenshots";
 "menuHistoryClear" = "Clear All";
-"historyClearTitle" = "Clear recent screenshots?";
-"historyClearBody" = "This removes all recent screenshots saved by Klik. on this Mac.";
+"menuHistoryConfirmClear" = "Confirm";
+"menuHistoryConfirmClearHint" = "Click again to clear screenshot history.";
 "menuQuit" = "Quit Klik.";
 "historyErrorTitle" = "Couldn’t access recent screenshots";
 "historyErrorBody" = "Check access to Klik.’s Application Support folder and try again.";
@@ -166,3 +168,19 @@
 "ocrReplaceTitle" = "Replace edited text?";
 "ocrReplaceMessage" = "Recognizing again will replace the text you edited.";
 "ocrReplaceButton" = "Replace Text";
+
+"toolScrollCapture" = "Scrolling Screenshot";
+"scrollSelectionSmall" = "Select a scrolling area at least 64 × 96 points.";
+"scrollSelectionMarked" = "Undo the annotations or start with a new selection to take a scrolling screenshot.";
+"scrollStarting" = "Getting the first frame…";
+"scrollReady" = "Scroll vertically or horizontally. The first movement sets the axis.";
+"scrollProgress" = "%lld px tall. Keep scrolling or click Done.";
+"scrollUnaligned" = "Can’t match this view. Return to a captured section, then scroll slowly.";
+"scrollLimit" = "Maximum image size reached. Click Done to review the captured section.";
+"scrollFinishing" = "Stitching the final image…";
+"scrollPartial" = "The last view couldn’t be aligned. This preview ends at the last matched section.";
+"scrollSourceFailed" = "Screen capture was interrupted.";
+"scrollPreviewTitle" = "Scrolling Screenshot Preview";
+"scrollDimensions" = "%lld × %lld px";
+"scrollProgressWide" = "%lld px wide. Keep scrolling or click Done.";
+"scrollMosaicHint" = "Mosaic (hold Option and scroll to resize)";

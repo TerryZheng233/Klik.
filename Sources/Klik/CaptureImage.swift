@@ -54,6 +54,7 @@ struct CoverColor: Hashable {
 }
 
 enum Mark: Equatable {
+    case ellipse(CGRect, Ink)
     case rectangle(CGRect, Ink)
     case arrow(CGPoint, CGPoint, Ink)
     case pen([CGPoint], Ink)
@@ -62,10 +63,25 @@ enum Mark: Equatable {
 
     static let textFont = NSFont.systemFont(ofSize: 18, weight: .semibold)
 
+    var resizableBounds: CGRect? {
+        switch self {
+        case .ellipse(let rect, _), .rectangle(let rect, _): return rect.standardized
+        default: return nil
+        }
+    }
+
+    func resized(to rect: CGRect) -> Mark {
+        switch self {
+        case .ellipse(_, let ink): return .ellipse(rect, ink)
+        case .rectangle(_, let ink): return .rectangle(rect, ink)
+        default: return self
+        }
+    }
+
     // Mosaic strokes stay fixed so a misplaced drag cannot reveal covered content.
     var movableBounds: CGRect? {
         switch self {
-        case .rectangle(let rect, _): return rect.standardized
+        case .ellipse(let rect, _), .rectangle(let rect, _): return rect.standardized
         case .arrow(let start, let end, _): return CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
                                                           width: abs(end.x - start.x), height: abs(end.y - start.y))
         case .pen(let points, _):
@@ -88,6 +104,15 @@ enum Mark: Equatable {
             return hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= tolerance
         }
         switch self {
+        case .ellipse(let rect, _):
+            let r = rect.standardized
+            func contains(_ ellipse: CGRect) -> Bool {
+                guard ellipse.width > 0, ellipse.height > 0 else { return false }
+                return hypot((point.x - ellipse.midX) / (ellipse.width / 2),
+                             (point.y - ellipse.midY) / (ellipse.height / 2)) <= 1
+            }
+            return contains(r.insetBy(dx: -tolerance, dy: -tolerance))
+                && !contains(r.insetBy(dx: tolerance, dy: tolerance))
         case .rectangle(let rect, _):
             let r = rect.standardized
             return r.insetBy(dx: -tolerance, dy: -tolerance).contains(point)
@@ -105,6 +130,7 @@ enum Mark: Equatable {
     func translated(by delta: CGPoint) -> Mark {
         func moved(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + delta.x, y: p.y + delta.y) }
         switch self {
+        case .ellipse(let rect, let ink): return .ellipse(rect.offsetBy(dx: delta.x, dy: delta.y), ink)
         case .rectangle(let rect, let ink): return .rectangle(rect.offsetBy(dx: delta.x, dy: delta.y), ink)
         case .arrow(let start, let end, let ink): return .arrow(moved(start), moved(end), ink)
         case .pen(let points, let ink): return .pen(points.map(moved), ink)
@@ -119,6 +145,9 @@ enum Mark: Equatable {
         let path = CGMutablePath()
         let ink: Ink
         switch self {
+        case .ellipse(let rect, let color):
+            ink = color
+            path.addEllipse(in: rect)
         case .rectangle(let rect, let color):
             ink = color
             path.addRect(rect)
@@ -293,6 +322,40 @@ final class CaptureImage {
         return Self.sample(image, x: x, y: y)
     }
 
+    private var scaleX: CGFloat { CGFloat(image.width) / size.width }
+    private var scaleY: CGFloat { CGFloat(image.height) / size.height }
+    private var pixelBounds: CGRect { CGRect(x: 0, y: 0, width: image.width, height: image.height) }
+
+    func pixelRect(for selection: CGRect) -> CGRect {
+        let rect = selection.offsetBy(dx: -origin.x, dy: -origin.y)
+            .applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
+        // Ignore round-off when a backing-pixel-aligned edge is converted to points and back.
+        let minX = floor(rect.minX + 1e-7), maxX = ceil(rect.maxX - 1e-7)
+        let minY = floor(rect.minY + 1e-7), maxY = ceil(rect.maxY - 1e-7)
+        return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
+            .intersection(pixelBounds)
+    }
+
+    private func pixelPoint(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: ((point.x - origin.x) * scaleX).rounded(),
+                y: ((point.y - origin.y) * scaleY).rounded())
+    }
+
+    private func selection(for pixels: CGRect) -> CGRect {
+        pixels.applying(CGAffineTransform(scaleX: 1 / scaleX, y: 1 / scaleY)).offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    func squareSelection(from start: CGPoint, to end: CGPoint) -> CGRect {
+        selection(for: Selection.square(from: pixelPoint(start), to: pixelPoint(end), in: pixelBounds))
+    }
+
+    func squareSelection(resizing rect: CGRect, handle: Selection.Handle, delta: CGPoint) -> CGRect {
+        let pixelDelta = CGPoint(x: (delta.x * scaleX).rounded(), y: (delta.y * scaleY).rounded())
+        let minimum = ceil(Selection.minimum * max(scaleX, scaleY))
+        let pixels = handle.resizeSquare(pixelRect(for: rect), delta: pixelDelta, in: pixelBounds, minimum: minimum)
+        return selection(for: pixels)
+    }
+
     // Sample what is actually visible in the selection, including completed annotations.
     func visibleColor(at point: CGPoint, selection: CGRect, marks: [Mark]) -> CoverColor? {
         guard selection.contains(point) else { return color(at: point) }
@@ -304,11 +367,7 @@ final class CaptureImage {
             sampleCache = (selection, marks, image)
             rendered = image
         }
-        let scaleX = CGFloat(image.width) / size.width
-        let scaleY = CGFloat(image.height) / size.height
-        let pixelRect = selection.offsetBy(dx: -origin.x, dy: -origin.y)
-            .applying(CGAffineTransform(scaleX: scaleX, y: scaleY)).integral
-            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let pixelRect = pixelRect(for: selection)
         let x = Int(floor((point.x - origin.x) * scaleX - pixelRect.minX))
         let y = Int(floor((point.y - origin.y) * scaleY - pixelRect.minY))
         return Self.sample(rendered, x: x, y: y)
@@ -336,12 +395,7 @@ final class CaptureImage {
     }
 
     func render(selection: CGRect, marks: [Mark]) -> CGImage? {
-        let scaleX = CGFloat(image.width) / size.width
-        let scaleY = CGFloat(image.height) / size.height
-        let pixelBounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let pixels = selection.offsetBy(dx: -origin.x, dy: -origin.y)
-            .applying(CGAffineTransform(scaleX: scaleX, y: scaleY))
-            .integral.intersection(pixelBounds)
+        let pixels = pixelRect(for: selection)
         guard !pixels.isEmpty, let crop = image.cropping(to: pixels) else { return nil }
         // Unmarked captures can keep the source pixels and colour profile as-is.
         if marks.isEmpty { return crop }
@@ -369,7 +423,7 @@ final class CaptureImage {
         return CGImageDestinationFinalize(encoder) ? data as Data : nil
     }
 
-    private static func bitmap(width: Int, height: Int) -> CGContext? {
+    static func bitmap(width: Int, height: Int) -> CGContext? {
         CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                   space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
