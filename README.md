@@ -10,7 +10,7 @@
   Apple silicon · macOS 14+
 </p>
 
-Press **⌥A**, or set a shortcut you like. Select an area, add annotations if you need them, then press **Enter** or simply double-click the selection when no annotation tool is active. Boom, it’s in your clipboard, ready to paste. You can recognize text, too, whenever you need it.
+Press **⌥A**, or set a shortcut you like. Select an area, add annotations if you need them, then press **Enter** or double-click the selection with no annotation tool active. Boom, it’s in your clipboard, ready to paste. You can recognize text, too.
 
 ![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
@@ -21,7 +21,7 @@ Press **⌥A**, or set a shortcut you like. Select an area, add annotations if y
 - **Capture and copy:** Pick an area, display, or window, then paste your screenshot wherever you need it.
 - **Mark it up:** Add shapes, arrows, text, or pen strokes. Cover details with pixelation, a soft brush, or a solid color, and pick colors straight from the image.
 - **Pick out text:** Review and edit text recognized on your Mac alongside the screenshot, then copy it or carry on marking up the image.
-- **Keep what you need:** Save a PNG to a folder you choose, and optionally keep a recent screenshot history on your Mac.
+- **Save it for later:** Save a PNG to a folder you choose, or keep a history of recent screenshots on your Mac.
 
 ## Why I made Klik.
 
@@ -46,7 +46,7 @@ I love how easy it is to take a screenshot in WeChat. But confirming one can bri
 
 Want to capture a partly covered window? Hold **Space**, point to any visible part, and click to select the full window. A magnifier appears as you drag or adjust a selection, so you can line up the edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
 
-Changed your mind about where an annotation should go? Drag a box, arrow, text, or pen mark to move it. You can resize a box using its handles or adjust an arrow by dragging an endpoint. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
+Drag a box, arrow, text, or pen mark if you want to move it. You can resize a box using its handles or adjust an arrow by dragging an endpoint. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 
@@ -54,7 +54,7 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 
 Select an area and choose **Recognize Text**. Klik. uses Apple’s Vision framework on your Mac and shows the result beside the image. You can edit or copy the text and keep using the markup tools.
 
-Klik. recognizes text from the selected image and its annotations. If you add or undo mosaic, unedited results refresh automatically. If you’ve edited the text, Klik. keeps your changes and warns that they may still include covered content. The refresh button asks before replacing your edits. Take a moment to check the text before sharing, especially after covering information or when working with formulas and tables.
+Klik. recognizes text from the selected image and its annotations. If you add or undo mosaic, unedited results refresh automatically. If you’ve edited the text, Klik. keeps your changes and warns that they may still include covered content. The refresh button asks before replacing your edits. Check the text before sharing, especially after covering information or when working with formulas and tables.
 
 In the OCR view, **Copy Text** keeps the editor open. The download button or **Enter** saves the image; while editing text, **Enter** inserts a line and **⌘Enter** saves the image.
 
@@ -71,7 +71,7 @@ Klik. currently supports **Apple silicon Macs running macOS 14 or later**. The d
 
 ### Install with an agent
 
-Prefer a little help with setup? Paste this into a chat with an agent that can use your Mac and access GitHub:
+If you’d like an agent to help with setup, paste this into a chat with one that can use your Mac and access GitHub:
 
 ```text
 Help me install the latest Klik. release on this Mac from:
@@ -101,7 +101,7 @@ These steps create an exception for the app. If you don’t see the option, or y
 
 ## Recent screenshots and settings
 
-Your recent screenshots are waiting under **k.** in the menu bar. They’re stored on your Mac; select one to preview and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
+Find your recent screenshots under **k.** in the menu bar. They’re stored on your Mac; select one to preview and copy it again, or clear the list after confirming. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
 
 In settings, you can also have Klik. open at login and check for updates. When a new version is available, you can install it there and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing. GitHub releases use ad hoc app signing, so macOS may request screen recording permission again after an update.
 
