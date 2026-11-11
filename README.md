@@ -10,7 +10,7 @@
   Apple silicon · macOS 14+
 </p>
 
-Press **⌥A** or your own shortcut, select an area, then press **Enter** or double-click the selection to copy it. Double-click works when no annotation tool is active. Add annotations or recognize text whenever you need them, then get back to what you were doing.
+Press **⌥A**, or set a shortcut you like. Select an area, add annotations if you need them, then press **Enter** or simply double-click the selection when no annotation tool is active. Boom, it’s in your clipboard, ready to paste. You can recognize text, too, whenever you need it.
 
 ![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
