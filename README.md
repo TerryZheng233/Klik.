@@ -10,7 +10,7 @@
   Apple silicon · macOS 14+
 </p>
 
-Press **⌥A** or your own shortcut, select an area, and press **Enter** to copy. Just need a quick screenshot? Double-click the selection and it’s ready to paste. Add annotations or recognize text whenever you need them, then get back to what you were doing.
+Press **⌥A** or your own shortcut, select an area, then press **Enter** or double-click the selection to copy it. Double-click works when no annotation tool is active. Add annotations or recognize text whenever you need them, then get back to what you were doing.
 
 ![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
 
