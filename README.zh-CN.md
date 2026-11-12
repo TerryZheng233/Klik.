@@ -12,9 +12,9 @@
 
 按 **⌥A**，或者换成你喜欢的快捷键。框选区域，需要的话加上标注，然后按 **Enter**，也可以在没有选中标注工具时直接双击选区。搞定！截图已经在剪贴板里，随时可以粘贴。需要的话，还可以识别截图里的文字。
 
-![Klik. 框选餐厅预约信息的示意图：晚餐时间已标出，示例联系方式已打上马赛克。](docs/klik-reservation-green.png)
+![Klik. 在 Safari 中框选维基百科文章，使用矩形标出一个词，底部显示标注工具栏。](docs/klik-capture-actual.png)
 
-*示意图使用虚构信息；工具栏可能与当前版本略有不同。*
+*框选区域后，可以先用工具栏标注，再复制或保存。*
 
 ## 能做什么
 
@@ -58,11 +58,13 @@
 2. 在选区内平稳滚动。第一次检测到的滚动会锁定纵向或横向，之后可以沿同一轴上下或左右来回滚动。
 3. 点击「**完成**」预览拼好的长图。可以边滚动查看边标注。按 **Enter** 或点 **✓** 复制，点 **↓** 保存原尺寸 PNG。
 
-<p align="center"><img src="docs/klik-scrolling-preview.png" alt="Klik. 长图确认界面，底部显示标注工具栏和拼接后的像素尺寸。" width="560"></p>
-
 ## 识别文字
 
 框选好区域，点击「**识别文字**」就可以了。Klik. 使用 Apple 的 Vision 框架在本机识别，并在截图旁显示结果。你可以编辑、复制文字，也可以继续给图片添加标注。
+
+![Klik. 同时显示框选的维基百科文章、识别结果和标注工具。](docs/klik-ocr-actual.png)
+
+*识别后的文字可以编辑；复制前请对照原图检查。*
 
 Klik. 会识别当前截图和已有标注中的文字。添加或撤销马赛克后，未编辑的结果会自动重新识别；如果你已经编辑过文字，Klik. 会保留修改，并提示其中可能仍有被遮盖的内容。点击重新识别时，Klik. 会先确认是否替换你的修改。分享前请检查结果，尤其是遮盖信息后，或识别公式、表格时。
 
@@ -117,9 +119,9 @@ GitHub 上的版本使用临时签名，**尚未通过 Apple 公证**。首次�
 
 设置里还可以修改快捷键，或在「语言」里选择「跟随系统」「English」或「简体中文」。引导、设置和截图工具统一使用橄榄绿与奶油白配色。引导、设置和滚动截图提示窗会跟随 Mac 的浅色或深色外观。
 
-![Klik. 设置界面示意图，左侧为英文浅色外观，右侧为简体中文深色外观。](docs/klik-interface.png)
+<p align="center"><img src="docs/klik-settings-actual.png" alt="Klik. 设置界面，显示语言、历史记录、保存位置、快捷键和更新选项。" width="480"></p>
 
-*设置界面双语示意图；部分控件已更新。*
+*截图中的本机保存路径已遮盖。*
 
 ## 从源码构建
 
@@ -143,6 +145,10 @@ dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
   'Klik.' Klik-build-arm64.dmg
 ```
+
+## 截图来源
+
+框选与文字识别示例使用了[维基百科「Coffee」条目](https://en.wikipedia.org/wiki/Coffee)的摘录，采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 许可。咖啡照片由 [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg) 拍摄，采用 [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) 许可。截图经过裁切和标注。
 
 ## 许可证
 

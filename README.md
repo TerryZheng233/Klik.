@@ -12,9 +12,9 @@
 
 Press **⌥A**, or set a shortcut you like. Select an area, add annotations if you need them, then press **Enter** or double-click the selection with no annotation tool active. Boom, it’s in your clipboard, ready to paste. You can recognize text, too.
 
-![Illustration of a restaurant booking selected with Klik., with the dinner time highlighted and example contact details pixelated.](docs/klik-reservation-green.png)
+![Klik. selecting a Wikipedia article in Safari, with a rectangle around a word and the annotation toolbar visible.](docs/klik-capture-actual.png)
 
-*Illustration with fictional details; the toolbar may differ from the current version.*
+*Select an area, then use the toolbar to mark it up before copying or saving.*
 
 ## What you can do
 
@@ -58,11 +58,13 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 2. Scroll inside the selection at a steady pace. The first detected movement sets the axis. You can scroll up and down or left and right, including reversing direction on that axis.
 3. Click **Done** to review the stitched image. Scroll through it and add any markup you need. Press **Enter** or click **✓** to copy it, or use **↓** to save a PNG at its full stitched resolution.
 
-<p align="center"><img src="docs/klik-scrolling-preview.png" alt="Klik. scrolling screenshot preview with markup tools and the stitched image dimensions." width="560"></p>
-
 ## Recognize text
 
 Select an area and choose **Recognize Text**. Klik. uses Apple’s Vision framework on your Mac and shows the result beside the image. You can edit or copy the text and keep using the markup tools.
+
+![Klik. showing a selected Wikipedia article and its recognized text, with markup and copy controls.](docs/klik-ocr-actual.png)
+
+*The recognized text can be edited before copying; check it against the image.*
 
 Klik. recognizes text from the selected image and its annotations. If you add or undo mosaic, unedited results refresh automatically. If you’ve edited the text, Klik. keeps your changes and warns that they may still include covered content. The refresh button asks before replacing your edits. Check the text before sharing, especially after covering information or when working with formulas and tables.
 
@@ -117,9 +119,9 @@ In settings, you can also have Klik. open at login and check for updates. When a
 
 You can also change your shortcut in settings, or choose **Follow System**, **English**, or **简体中文** under **Language**. The olive-and-cream palette runs through the app, including the guide, settings, and capture tools. The guide, settings, and scrolling capture prompt follow your Mac’s light or dark appearance.
 
-![Illustration of Klik. settings in English light mode and Simplified Chinese dark mode.](docs/klik-interface.png)
+<p align="center"><img src="docs/klik-settings-actual.png" alt="Klik. settings, with language, history, save location, shortcut and update controls." width="480"></p>
 
-*Illustration of the settings in both languages; some controls have since changed.*
+*The local save path is obscured in this screenshot.*
 
 ## Build from source
 
@@ -143,6 +145,10 @@ dmgbuild -s Packaging/dmg-settings.py \
   -D app=.build/distribution/Klik.app -D background=Packaging/background.png \
   'Klik.' Klik-build-arm64.dmg
 ```
+
+## Screenshot credits
+
+The capture and text recognition examples show the [Wikipedia article “Coffee”](https://en.wikipedia.org/wiki/Coffee), excerpted under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The coffee photograph is by [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg), under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Screenshots were cropped and annotated.
 
 ## License
 
