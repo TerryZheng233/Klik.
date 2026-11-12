@@ -10,6 +10,8 @@
   Apple 芯片 · macOS 14+
 </p>
 
+https://github.com/user-attachments/assets/5356d252-2ed5-4efb-a5d1-f7761f045e13
+
 按 **⌥A**，或者换成你喜欢的快捷键。框选区域，需要的话加上标注，然后按 **Enter**，也可以在没有选中标注工具时直接双击选区。搞定！截图已经在剪贴板里，随时可以粘贴。需要的话，还可以识别截图里的文字。
 
 ![Klik. 在 Safari 中框选维基百科文章，使用矩形标出一个词，底部显示标注工具栏。](docs/klik-capture-actual.png)

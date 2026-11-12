@@ -10,6 +10,8 @@
   Apple silicon · macOS 14+
 </p>
 
+https://github.com/user-attachments/assets/99764191-c641-44bc-b292-a2fe8ec5a89e
+
 Press **⌥A**, or set a shortcut you like. Select an area, add annotations if you need them, then press **Enter** or double-click the selection with no annotation tool active. Boom, it’s in your clipboard, ready to paste. You can recognize text, too.
 
 ![Klik. selecting a Wikipedia article in Safari, with a rectangle around a word and the annotation toolbar visible.](docs/klik-capture-actual.png)
