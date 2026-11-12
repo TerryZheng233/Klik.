@@ -26,7 +26,7 @@ Press **⌥A**, or set a shortcut you like. Select an area, add annotations if y
 
 ## Why I made Klik.
 
-I love how easy it is to take a screenshot in WeChat. But confirming one can bring the WeChat window back to the front, and macOS saves screenshots to the desktop by default. I made Klik. because I wanted to capture something, paste it, and carry on without losing my place or collecting files I don’t need.
+I love how easy it is to take a screenshot in WeChat. But confirming one always brings the WeChat window to the front, and macOS saves screenshots to the desktop by default, which slowly turns into a mess over time. I made Klik. because I wanted to capture something, paste it, and carry on without losing my place or collecting files I don’t need.
 
 ## Choose what to capture
 
