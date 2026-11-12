@@ -11,7 +11,9 @@ final class HoverButtonTests: XCTestCase {
                                                      timestamp: 0, windowNumber: 0, context: nil,
                                                      eventNumber: 0, clickCount: 0, pressure: 0))
         button.mouseEntered(with: event)
-        XCTAssertGreaterThan(try XCTUnwrap(button.layer).shadowOpacity, 0)
+        XCTAssertGreaterThan(try XCTUnwrap(button.layer?.backgroundColor).alpha, 0)
+        XCTAssertEqual(button.layer?.shadowOpacity, 0)
+        XCTAssertEqual(button.layer?.borderWidth, 0)
         XCTAssertEqual(button.layer?.cornerCurve, .continuous)
         button.toolSelected = true
         XCTAssertEqual(button.layer?.backgroundColor, KlikTheme.buttonSelected.cgColor)
@@ -21,6 +23,6 @@ final class HoverButtonTests: XCTestCase {
         button.toolSelected = false
         button.isEnabled = false
         button.mouseEntered(with: event)
-        XCTAssertEqual(button.layer?.shadowOpacity, 0)
+        XCTAssertEqual(button.layer?.backgroundColor?.alpha, 0)
     }
 }

@@ -2,15 +2,89 @@ import AppKit
 import Carbon
 
 enum CaptureDownload {
-    static func save(_ png: Data, location: ScreenshotLocation = ScreenshotLocation()) throws {
+    /// The final name only becomes visible after commit. Cancellation removes
+    /// the staged file without leaving a screenshot in the destination.
+    final class Pending {
+        private var temporary: URL?
+        private let destination: URL?
+        private let folder: URL?
+        private var access: Bool
+        private let custom: (() throws -> Void)?
+
+        init(temporary: URL, destination: URL, folder: URL, access: Bool) {
+            self.temporary = temporary
+            self.destination = destination
+            self.folder = folder
+            self.access = access
+            self.custom = nil
+        }
+        init(custom: @escaping () throws -> Void) {
+            self.temporary = nil
+            self.destination = nil
+            self.folder = nil
+            self.access = false
+            self.custom = custom
+        }
+        func commit() throws {
+            if let custom { try custom(); return }
+            guard let temporary, let destination else { throw CocoaError(.fileWriteUnknown) }
+            try FileManager.default.moveItem(at: temporary, to: destination)
+            self.temporary = nil
+            releaseAccess()
+        }
+        private func releaseAccess() {
+            if access { folder?.stopAccessingSecurityScopedResource(); access = false }
+        }
+        deinit {
+            if let temporary { try? FileManager.default.removeItem(at: temporary) }
+            releaseAccess()
+        }
+    }
+
+    static func prepare(_ png: Data, location: ScreenshotLocation = ScreenshotLocation()) throws -> Pending {
         let folder = try location.resolve()
         let access = folder.startAccessingSecurityScopedResource()
-        defer { if access { folder.stopAccessingSecurityScopedResource() } }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss-SSS"
         let name = "Klik \(formatter.string(from: Date())) \(UUID().uuidString.prefix(6)).png"
-        try png.write(to: folder.appendingPathComponent(name), options: .atomic)
+        let destination = folder.appendingPathComponent(name)
+        let temporary = folder.appendingPathComponent(".klik-\(UUID().uuidString).tmp")
+        do {
+            try png.write(to: temporary, options: .atomic)
+            return Pending(temporary: temporary, destination: destination, folder: folder, access: access)
+        } catch {
+            try? FileManager.default.removeItem(at: temporary)
+            if access { folder.stopAccessingSecurityScopedResource() }
+            throw error
+        }
+    }
+    static func save(_ png: Data, location: ScreenshotLocation = ScreenshotLocation()) throws {
+        try prepare(png, location: location).commit()
+    }
+}
+
+enum PreparedCaptureExport {
+    struct Result {
+        let png: Data
+        let tiff: Data?
+        let download: CaptureDownload.Pending?
+    }
+    enum Failure: Error, Equatable { case render, download }
+
+    static func make(image: CGImage, destination: CaptureView.Destination,
+                     saveOverride: ((Data) throws -> Void)? = nil) throws -> Result {
+        guard let png = CaptureImage.png(image) else { throw Failure.render }
+        switch destination {
+        case .clipboard:
+            return Result(png: png, tiff: ClipboardImage.tiff(image), download: nil)
+        case .downloads:
+            do {
+                let pending = try saveOverride.map { save in CaptureDownload.Pending { try save(png) } }
+                    ?? CaptureDownload.prepare(png)
+                return Result(png: png, tiff: nil, download: pending)
+            } catch { throw Failure.download }
+        }
     }
 }
 
@@ -19,8 +93,8 @@ final class MosaicScrollHintPolicy {
     private let defaults: UserDefaults?
     private var localCount = 0
     private var localUsed = false
-    private let countKey = "mosaicScrollHintShownCount"
-    private let usedKey = "mosaicScrollHintUsed"
+    private let countKey = "markupWheelHintShownCount"
+    private let usedKey = "markupWheelHintUsed"
     init(defaults: UserDefaults? = nil) { self.defaults = defaults }
     var shouldShow: Bool {
         !(defaults?.bool(forKey: usedKey) ?? localUsed) && (defaults?.integer(forKey: countKey) ?? localCount) < 3
@@ -44,11 +118,11 @@ final class CapturePanel: NSPanel {
          guided: Bool = false, scrollHintPolicy: MosaicScrollHintPolicy = MosaicScrollHintPolicy(), captureWindow: ((CGWindowID) async throws -> CGImage)? = nil,
          startScrollCapture: ((CGRect) -> Void)? = nil,
          recognizeText: @escaping (CGImage) async throws -> String = { image in
-             try await Task.detached(priority: .userInitiated) { try TextRecognition.recognize(image) }.value
+             try await TextRecognitionWorker.shared.recognize(image)
          },
-         saveDownload: @escaping (Data) throws -> Void = { try CaptureDownload.save($0) },
+         saveDownload: ((Data) throws -> Void)? = nil,
          pasteboard: NSPasteboard = .general,
-         recordCapture: ((Data) -> Void)? = nil,
+         recordCapture: ((Data) async -> Void)? = nil,
          finish: @escaping (Outcome) -> Void) {
         canvas = CaptureView(background: CaptureImage(image: image, size: frame.size),
                              windowTargets: windowTargets, strings: strings, guided: guided,
@@ -91,12 +165,13 @@ final class CapturePanel: NSPanel {
 
     override func orderOut(_ sender: Any?) {
         canvas.cancelWindowCapture()
+        canvas.cancelExport()
         canvas.clearPointer()
         super.orderOut(sender)
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .scrollWheel && canvas.adjustMosaicSize(with: event) { return }
+        if event.type == .scrollWheel && canvas.adjustMarkupSize(with: event) { return }
         if canvas.isRecognizingText {
             let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
@@ -112,6 +187,10 @@ final class CapturePanel: NSPanel {
                       (modifiers.isEmpty && !canvas.isEditingRecognitionText(firstResponder))
                         || modifiers == .command {
                 canvas.saveImageFromTextRecognition()
+            } else if event.type == .keyDown, !composing, modifiers.isEmpty,
+                      [kVK_Delete, kVK_ForwardDelete].contains(Int(event.keyCode)),
+                      !canvas.isEditingRecognitionText(firstResponder), !canvas.isEditingRecognitionMarkup {
+                canvas.deleteSelectedMark()
             } else if event.type == .keyDown, !composing, Int(event.keyCode) == kVK_ANSI_Z,
                       !canvas.isEditingRecognitionText(firstResponder), !canvas.isEditingRecognitionMarkup,
                       modifiers == .command {
@@ -155,6 +234,8 @@ final class CapturePanel: NSPanel {
                 if !event.isARepeat { canvas.setWindowSnapHeld(true, at: mouseLocationOutsideOfEventStream) }
                 return
             }
+            if !composing, !canvas.isEditingText, modifiers.isEmpty,
+               [kVK_Delete, kVK_ForwardDelete].contains(key), canvas.deleteSelectedMark() { return }
             if !canvas.isEditingText, key == kVK_ANSI_Z {
                 if modifiers == .command { canvas.undo(); return }
                 if modifiers == [.command, .shift] { canvas.redo(); return }
@@ -174,6 +255,20 @@ final class CapturePanel: NSPanel {
 
 private final class PointerView: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+final class TextSizePreview: NSView {
+    var fontSize: CGFloat = 18 { didSet { needsDisplay = true } }
+    var ink: Ink = .red { didSet { needsDisplay = true } }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    func updateSize() {
+        let size = ("A" as NSString).size(withAttributes: [.font: MarkupTextStyle.font(size: fontSize)])
+        frame.size = CGSize(width: ceil(size.width) + 4, height: ceil(size.height) + 4)
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        ("A" as NSString).draw(at: CGPoint(x: 2, y: 2), withAttributes: MarkupTextStyle.attributes(ink: ink, size: fontSize))
+    }
 }
 
 private final class EyedropperPreview: NSView {
@@ -358,6 +453,7 @@ enum Tool: CaseIterable {
     }
 
     var usesInk: Bool { self != .mosaic }
+    var usesLineWidth: Bool { self == .ellipse || self == .rectangle || self == .arrow || self == .pen }
 }
 
 enum MarkConstraint {
@@ -397,19 +493,21 @@ final class CaptureView: NSView {
         case resize(Selection.Handle, CGRect, CGPoint)
         case move(CGRect, CGPoint)
         case moveMark(Int, Mark, CGPoint, [Mark])
-        case resizeArrow(Int, Mark, Bool, CGPoint, [Mark])
+        case resizeArrow(Int, Mark, Int, CGPoint, [Mark])
         case resizeMark(Int, Mark, Selection.Handle, CGPoint, [Mark])
         case mark(Tool, CGPoint)
+        case selectMark(Int, CGPoint)
     }
 
     enum Pointer: Equatable {
-        case crosshair, arrow, hand, openHand, closedHand, text, move, eyedropper
+        case crosshair, arrow, canvasPoint, hand, openHand, closedHand, text, move, eyedropper
         case resize(Selection.Handle)
 
         var cursor: NSCursor {
             switch self {
             case .crosshair: return .crosshair
             case .arrow: return .arrow
+            case .canvasPoint: return Self.canvasPointCursor(for: .red)
             case .hand: return .pointingHand
             case .openHand: return .openHand
             case .closedHand: return .closedHand
@@ -418,6 +516,31 @@ final class CaptureView: NSView {
             case .eyedropper: return Self.eyedropperCursor
             case .resize(let handle): return handle.cursor
             }
+        }
+
+        static func canvasPointCursor(for ink: Ink) -> NSCursor {
+            let image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
+                let dot = NSBezierPath(ovalIn: NSRect(x: 5.5, y: 5.5, width: 5, height: 5))
+                NSGraphicsContext.saveGraphicsState()
+                let glow = NSShadow()
+                glow.shadowColor = ink.color.withAlphaComponent(0.55)
+                glow.shadowBlurRadius = 3
+                glow.shadowOffset = .zero
+                glow.set()
+                ink.color.setFill()
+                dot.fill()
+                NSGraphicsContext.restoreGraphicsState()
+                NSColor.black.withAlphaComponent(0.7).setStroke()
+                dot.lineWidth = 2.5
+                dot.stroke()
+                NSColor.white.withAlphaComponent(0.95).setStroke()
+                dot.lineWidth = 1
+                dot.stroke()
+                ink.color.setFill()
+                dot.fill()
+                return true
+            }
+            return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
         }
 
         private static let eyedropperCursor: NSCursor = {
@@ -459,6 +582,9 @@ final class CaptureView: NSView {
     private let isDocument: Bool
     private weak var documentToolbarHost: NSView?
     private var documentExportInProgress = false
+    private var exportTask: Task<Void, Never>?
+    var isExporting: Bool { documentExportInProgress }
+    private var exportCommitted = false
     var onDocumentExport: ((Destination, CGImage) -> Void)?
     var onDocumentStatus: ((String) -> Void)?
     private var windowImage: CaptureImage?
@@ -467,15 +593,16 @@ final class CaptureView: NSView {
     private let captureWindow: ((CGWindowID) async throws -> CGImage)?
     private let startScrollCapture: ((CGRect) -> Void)?
     private let recognizeText: (CGImage) async throws -> String
-    private let saveDownload: (Data) throws -> Void
+    private let saveDownload: ((Data) throws -> Void)?
     private var recognitionTask: Task<Void, Never>?
+    private var recognitionRedraw: DispatchWorkItem?
     private var recognitionView: TextRecognitionView?
     private var windowCaptureTask: Task<Void, Never>?
     private var lastWindowClick: WindowSnap?
     private var doubleClickStart: CGPoint?
     private var copyWhenWindowReady = false
     private let pasteboard: NSPasteboard
-    private let recordCapture: ((Data) -> Void)?
+    private let recordCapture: ((Data) async -> Void)?
     private let strings: AppStrings
     private let finish: (CapturePanel.Outcome) -> Void
     private let coach: CaptureCoach?
@@ -483,11 +610,22 @@ final class CaptureView: NSView {
     private let toolbar = NSVisualEffectView()
     private let palette = NSVisualEffectView()
     private let mosaicOptions: MosaicOptions
+    private var shapeWidth: CGFloat = 2.5
+    private var penWidth: CGFloat = 2.5
+    private var textSize: CGFloat = 18
+    private var scrollUndoIndex: Int?
+    private var lastScrollUndoTime: TimeInterval = 0
+    private var feedbackGeneration = 0
+    private var feedbackWork: DispatchWorkItem?
+    private var ocrRefreshWork: DispatchWorkItem?
+    private var recognitionMosaicChanging = false
     private var showMosaicOptions = false
     private var mosaicStyle: MosaicStyle = .pixel
     private var strokeColor: CoverColor = .fallback
     private var pickingCoverColor = false
     private var pickingInkColor = false
+    private let sizeOutline = BrushOutline()
+    private let sizeFeedback = TextSizePreview(frame: .zero)
     private let modeHint = CaptureBadge(font: .systemFont(ofSize: 12, weight: .medium))
     private let errorLabel = CaptureBadge(font: .systemFont(ofSize: 13, weight: .medium))
     private let selectionSize = CaptureBadge(font: .monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
@@ -505,7 +643,6 @@ final class CaptureView: NSView {
     private let redoButton = HoverButton()
     private let inkButton = HoverButton()
     private weak var downloadButton: NSButton?
-    private let toolbarDividers = [NSView(), NSView(), NSView()]
     private var toolbarButtons: [NSButton] = []
     private var toolButtons: [Tool: NSButton] = [:]
     private var paletteButtons: [Ink: NSButton] = [:]
@@ -519,6 +656,7 @@ final class CaptureView: NSView {
     private var selectedMark: Int?
     private var preview: Mark?
     private var drag: Drag?
+    private var pendingMarkSelection: (index: Int, start: CGPoint)?
     private var dragPoint: CGPoint?
     private var strokePoints: [CGPoint] = []
     private var tool: Tool?
@@ -526,9 +664,12 @@ final class CaptureView: NSView {
     private var showPalette = false
     private var textField: NSTextField?
     private var textOrigin = CGPoint.zero
+    private var editingTextMark: (index: Int, original: Mark)?
     private var pointerTracking: NSTrackingArea?
     private(set) var pointer: Pointer?
     private var pointerHotSpot = CGPoint.zero
+    private var pointCursorInk: Ink?
+    private var cachedPointCursor: NSCursor?
     private var systemCursorHidden = false
 
     init(background: CaptureImage, windowTargets: [WindowSnap], strings: AppStrings, guided: Bool,
@@ -536,9 +677,9 @@ final class CaptureView: NSView {
          startScrollCapture: ((CGRect) -> Void)? = nil,
          documentSize: CGSize? = nil,
          recognizeText: @escaping (CGImage) async throws -> String = { image in try TextRecognition.recognize(image) },
-         saveDownload: @escaping (Data) throws -> Void = { try CaptureDownload.save($0) },
+         saveDownload: ((Data) throws -> Void)? = nil,
          pasteboard: NSPasteboard = .general,
-         recordCapture: ((Data) -> Void)?,
+         recordCapture: ((Data) async -> Void)?,
          finish: @escaping (CapturePanel.Outcome) -> Void) {
         self.desktop = background
         self.isDocument = documentSize != nil
@@ -580,6 +721,14 @@ final class CaptureView: NSView {
         addSubview(modeHint)
         addSubview(errorLabel)
         addSubview(selectionSize)
+        sizeFeedback.identifier = NSUserInterfaceItemIdentifier("markupSizeFeedback")
+        sizeFeedback.isHidden = true
+        sizeFeedback.setAccessibilityElement(false)
+        addSubview(sizeFeedback)
+        sizeOutline.identifier = NSUserInterfaceItemIdentifier("markupSizeOutline")
+        sizeOutline.isHidden = true
+        sizeOutline.setAccessibilityElement(false)
+        addSubview(sizeOutline)
         magnifier.isHidden = true
         magnifier.setAccessibilityElement(false)
         magnifier.identifier = NSUserInterfaceItemIdentifier("captureMagnifier")
@@ -629,6 +778,8 @@ final class CaptureView: NSView {
     func cancelWindowCapture() {
         recognitionTask?.cancel()
         recognitionTask = nil
+        ocrRefreshWork?.cancel()
+        ocrRefreshWork = nil
         recognitionView?.removeFromSuperview()
         recognitionView = nil
         windowCaptureTask?.cancel()
@@ -650,6 +801,8 @@ final class CaptureView: NSView {
     func clearPointer() {
         magnifier.isHidden = true
         brushOutline.isHidden = true
+        sizeOutline.isHidden = true
+        sizeFeedback.isHidden = true
         mosaicScrollHint.isHidden = true
         eyedropperPreview.isHidden = true
         if systemCursorHidden {
@@ -691,9 +844,9 @@ final class CaptureView: NSView {
                         let handle = Selection.Handle.hit(at: imagePoint, in: rect) { next = .resize(handle) }
                 else if let index = selectedMark, marks.indices.contains(index),
                         let rect = marks[index].resizableBounds, rect.contains(imagePoint) { next = .move }
-                else if markIndex(at: imagePoint) != nil { next = .move }
-                else if tool != nil { next = .crosshair }
-                else { next = .arrow }
+                else if let index = selectedMark, marks.indices.contains(index),
+                        marks[index].hitTest(imagePoint) || arrowHandle(for: marks[index], at: imagePoint) != nil { next = .move }
+                else { next = .canvasPoint }
             } else { next = .arrow }
         } else if hoveredWindow != nil {
             next = .hand
@@ -725,11 +878,12 @@ final class CaptureView: NSView {
         } else if drag == nil, let index = selectedMark, marks.indices.contains(index),
                   let rect = marks[index].resizableBounds, rect.contains(point) {
             next = .move
-        } else if drag == nil, selection?.contains(point) == true, markIndex(at: point) != nil {
+        } else if drag == nil, selection?.contains(point) == true, let index = selectedMark,
+                  marks.indices.contains(index), (marks[index].hitTest(point) || arrowHandle(for: marks[index], at: point) != nil) {
             next = .move
-        } else if drag == nil, tool == nil, let selection, selection.contains(point) {
-            next = isDocument ? .arrow : .openHand
-        } else if isDocument, selection?.contains(point) != true {
+        } else if selection?.contains(point) == true {
+            next = .canvasPoint
+        } else if isDocument {
             next = .arrow
         } else {
             next = .crosshair
@@ -740,20 +894,31 @@ final class CaptureView: NSView {
             inImage = recognitionView.capturePoint(at: point) != nil && !recognitionView.paletteContains(point)
             scale = recognitionView.imageScale
         } else {
-            inImage = selection?.contains(point) == true && (isDocument || toolbar.isHidden || !toolbar.frame.contains(point))
+            inImage = selection?.contains(point) == true && (isDocument ||
+                ((toolbar.isHidden || !toolbar.frame.contains(point)) &&
+                 (palette.isHidden || !palette.frame.contains(point)) &&
+                 (mosaicOptions.isHidden || !mosaicOptions.frame.contains(point))))
             scale = 1
         }
-        let showBrush = tool == .mosaic && inImage && drag == nil && next == .crosshair
-        brushOutline.isHidden = !showBrush
+        let showBrush = tool == .mosaic && inImage && drag == nil && next == .canvasPoint
+        brushOutline.isHidden = !showBrush || !sizeOutline.isHidden
+        if !sizeFeedback.isHidden { positionTextSizePreview(at: point) }
+        if !sizeOutline.isHidden {
+            sizeOutline.frame.origin = CGPoint(x: point.x - sizeOutline.frame.width / 2,
+                                               y: point.y - sizeOutline.frame.height / 2)
+        }
         if showBrush {
             let size = mosaicDiameter * scale + 4
             brushOutline.frame = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
             brushOutline.needsDisplay = true
         }
         if !scrollHintStarted && !scrollHintPolicy.shouldShow { scrollHintAvailable = false }
-        mosaicScrollHint.isHidden = !showBrush || !scrollHintAvailable
+        let wheelEligible = (tool != nil || selectedMark != nil) && inImage && drag == nil
+            && !isEditingText && !isEditingRecognitionMarkup && !pickingInkColor && !pickingCoverColor
+            && next != .text
+        mosaicScrollHint.isHidden = !wheelEligible || !scrollHintAvailable
         if !mosaicScrollHint.isHidden {
-            let gap = mosaicDiameter * scale / 2 + 9
+            let gap = tool == .mosaic ? mosaicDiameter * scale / 2 + 9 : 18
             let width = mosaicScrollHint.frame.width
             let height = mosaicScrollHint.frame.height
             let right = point.x + gap
@@ -784,13 +949,13 @@ final class CaptureView: NSView {
         }
         if isDocument {
             pointer = next
-            next.cursor.set()
+            (next == .canvasPoint ? canvasPointCursor() : next.cursor).set()
             return
         }
-        let shapeChanged = pointer != next
+        let shapeChanged = pointer != next || (next == .canvasPoint && pointCursorInk != ink)
         if shapeChanged {
             pointer = next
-            let cursor = next.cursor
+            let cursor = next == .canvasPoint ? canvasPointCursor() : next.cursor
             pointerView.image = cursor.image
             pointerView.setFrameSize(cursor.image.size)
             pointerHotSpot = cursor.hotSpot
@@ -799,7 +964,7 @@ final class CaptureView: NSView {
             // The system may replace NSCursor.set() after an event. A single
             // pointer drawn in the overlay cannot be overwritten by AppKit.
             systemCursorHidden = CGDisplayHideCursor(CGMainDisplayID()) == .success
-            if !systemCursorHidden { next.cursor.set() }
+            if !systemCursorHidden { (next == .canvasPoint ? canvasPointCursor() : next.cursor).set() }
         }
         if systemCursorHidden {
             pointerView.setFrameOrigin(CGPoint(x: point.x - pointerHotSpot.x, y: point.y - pointerHotSpot.y))
@@ -807,18 +972,45 @@ final class CaptureView: NSView {
         }
     }
 
-    @discardableResult
-    func adjustMosaicSize(with event: NSEvent) -> Bool {
-        adjustMosaicSize(delta: event.scrollingDeltaY, precise: event.hasPreciseScrollingDeltas,
-                         at: event.locationInWindow)
+    private func canvasPointCursor() -> NSCursor {
+        if pointCursorInk != ink || cachedPointCursor == nil {
+            cachedPointCursor = Pointer.canvasPointCursor(for: ink)
+            pointCursorInk = ink
+        }
+        return cachedPointCursor!
     }
 
     @discardableResult
+    func adjustMarkupSize(with event: NSEvent) -> Bool {
+        adjustMarkupSize(delta: event.scrollingDeltaY == 0 ? event.scrollingDeltaX : event.scrollingDeltaY,
+                         precise: event.hasPreciseScrollingDeltas,
+                         at: event.locationInWindow, modifiers: event.modifierFlags)
+    }
+
+    // Retained for the existing mosaic interaction and its focused tests.
+    @discardableResult
     func adjustMosaicSize(delta: CGFloat, precise: Bool, at windowPoint: CGPoint) -> Bool {
-        guard tool == .mosaic, drag == nil, !pickingInkColor, !pickingCoverColor else { return false }
+        guard tool == .mosaic else { return false }
+        return adjustMarkupSize(delta: delta, precise: precise, at: windowPoint,
+                                modifiers: isDocument ? .option : [])
+    }
+
+    private func resetScrollUndo() {
+        scrollUndoIndex = nil
+        lastScrollUndoTime = 0
+    }
+
+    @discardableResult
+    func adjustMarkupSize(delta: CGFloat, precise: Bool, at windowPoint: CGPoint,
+                          modifiers: NSEvent.ModifierFlags = []) -> Bool {
+        let flags = modifiers.intersection([.command, .shift, .option, .control])
+        guard flags == (isDocument ? .option : []), delta != 0,
+              drag == nil, !pickingInkColor, !pickingCoverColor, !documentExportInProgress,
+              !isEditingText, !isEditingRecognitionMarkup else { return false }
         let point = convert(windowPoint, from: nil)
         if let recognitionView {
             guard !recognitionView.paletteContains(point), !recognitionView.textContains(point),
+                  !recognitionView.markupInputContains(point),
                   recognitionView.capturePoint(at: point) != nil else { return false }
         } else {
             guard let selection, selection.contains(point) else { return false }
@@ -830,14 +1022,143 @@ final class CaptureView: NSView {
                       (mosaicOptions.isHidden || !mosaicOptions.frame.contains(point)) else { return false }
             }
         }
-        guard delta != 0 else { return false }
+        let index = selectedMark.flatMap { marks.indices.contains($0) ? $0 : nil }
+        let selected = index.map { marks[$0] }
+        let increment: CGFloat = precise ? delta * 0.25 : (delta > 0 ? 1 : -1)
+        let direction: CGFloat = delta > 0 ? 1 : -1
+        var value: CGFloat
+        var title: UIKey
+        var updated: Mark?
+        var affectsMosaic = false
+        if let selected {
+            switch selected {
+            case .text(let text, let origin, let ink, let oldSize):
+                value = max(10, min(72, oldSize + (precise ? delta * 0.5 : direction * 2)))
+                title = .textSize
+                updated = .text(text, origin, ink, size: value)
+                textSize = value
+            case .mosaic(let points, let diameter, let style, let color):
+                value = max(10, min(100, diameter + (precise ? delta * 0.6 : direction * 4)))
+                title = .wheelMosaicSize
+                updated = .mosaic(points, diameter: value, style: style, color: color)
+                mosaicDiameter = value
+                affectsMosaic = true
+            default:
+                guard let width = selected.lineWidth else { return false }
+                value = max(1, min(20, width + increment))
+                title = .penWidth
+                updated = selected.withLineWidth(value)
+                if case .pen = selected { penWidth = value } else { shapeWidth = value }
+            }
+        } else if let tool {
+            switch tool {
+            case .mosaic:
+                value = max(10, min(100, mosaicDiameter + (precise ? delta * 0.6 : direction * 4)))
+                mosaicDiameter = value
+                title = .wheelMosaicSize
+                scrollHintAvailable = false
+                scrollHintPolicy.didScroll()
+                mosaicScrollHint.isHidden = true
+            case .text:
+                value = max(10, min(72, textSize + (precise ? delta * 0.5 : direction * 2)))
+                textSize = value
+                title = .textSize
+            case .pen:
+                value = max(1, min(20, penWidth + increment))
+                penWidth = value
+                title = .penWidth
+            case .ellipse, .rectangle, .arrow:
+                value = max(1, min(20, shapeWidth + increment))
+                shapeWidth = value
+                title = .penWidth
+            }
+        } else { return false }
+
         scrollHintAvailable = false
         scrollHintPolicy.didScroll()
         mosaicScrollHint.isHidden = true
-        let step = precise ? delta * 0.6 : (delta > 0 ? 4 : -4)
-        mosaicDiameter = max(10, min(100, mosaicDiameter + step))
+        if let index, let updated, updated != marks[index] {
+            let now = ProcessInfo.processInfo.systemUptime
+            if scrollUndoIndex != index || now - lastScrollUndoTime > 0.6 {
+                undoMarks.append(marks)
+                redoMarks.removeAll()
+            }
+            scrollUndoIndex = index
+            lastScrollUndoTime = now
+            marks[index] = updated
+            background.clearSampleCache()
+            if affectsMosaic, let recognitionView {
+                recognitionTask?.cancel()
+                recognitionTask = nil
+                if !recognitionView.preserveEditedTextForChangedImage(isDrawing: true) { recognitionView.showLoading() }
+                ocrRefreshWork?.cancel()
+                let work = DispatchWorkItem { [weak self] in self?.rerunRecognitionForCurrentCapture() }
+                ocrRefreshWork = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+            }
+            syncRecognitionMarkup()
+            refresh()
+        }
+        showSizeFeedback(title: title, value: value, at: point)
         updatePointer(at: windowPoint)
         return true
+    }
+
+    private func hideSizeFeedback() {
+        feedbackGeneration += 1
+        feedbackWork?.cancel()
+        sizeFeedback.isHidden = true
+        sizeOutline.isHidden = true
+    }
+
+    private func showSizeFeedback(title: UIKey, value: CGFloat, at point: CGPoint) {
+        feedbackGeneration += 1
+        let generation = feedbackGeneration
+        feedbackWork?.cancel()
+        sizeFeedback.layer?.removeAllAnimations()
+        sizeOutline.layer?.removeAllAnimations()
+        let feedback: NSView
+        if title == .textSize {
+            sizeOutline.isHidden = true
+            sizeFeedback.alphaValue = 1
+            sizeFeedback.fontSize = value * (recognitionView?.imageScale ?? 1)
+            sizeFeedback.ink = ink
+            sizeFeedback.updateSize()
+            positionTextSizePreview(at: point)
+            sizeFeedback.isHidden = false
+            feedback = sizeFeedback
+        } else {
+            sizeFeedback.isHidden = true
+            let diameter = value * (recognitionView?.imageScale ?? 1)
+            let side = diameter + 4
+            sizeOutline.frame = CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)
+            sizeOutline.alphaValue = 1
+            sizeOutline.needsDisplay = true
+            sizeOutline.isHidden = false
+            feedback = sizeOutline
+        }
+        let work = DispatchWorkItem { [weak self, weak feedback] in
+            guard let self, let feedback, self.feedbackGeneration == generation else { return }
+            let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.3
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                feedback.animator().alphaValue = 0
+            } completionHandler: { [weak self, weak feedback] in
+                guard let self, let feedback, self.feedbackGeneration == generation else { return }
+                feedback.isHidden = true
+                if let window = self.window { self.updatePointer(at: window.mouseLocationOutsideOfEventStream) }
+            }
+        }
+        feedbackWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
+    }
+
+    private func positionTextSizePreview(at point: CGPoint) {
+        let area = isDocument ? visibleRect : bounds
+        let height = sizeFeedback.frame.height
+        sizeFeedback.frame.origin = CGPoint(x: point.x - sizeFeedback.frame.width - 8,
+                                           y: max(area.minY, min(point.y - height / 2, area.maxY - height)))
     }
 
     func setWindowSnapHeld(_ held: Bool, at windowPoint: CGPoint) {
@@ -869,12 +1190,12 @@ final class CaptureView: NSView {
         if selection != nil, draftSelection == nil {
             context.saveGState()
             context.clip(to: active)
-            for mark in marks { mark.draw(in: context, background: background) }
-            preview?.draw(in: context, background: background)
+            for (index, mark) in marks.enumerated() where index != editingTextMark?.index { mark.draw(in: context, background: background) }
+            preview?.draw(in: context, background: background, isPreview: true)
             if let selectedMark, marks.indices.contains(selectedMark) {
                 let mark = marks[selectedMark]
-                if case .arrow(let start, let end, _) = mark {
-                    for point in [start, end] {
+                if let arrow = mark.arrowGeometry {
+                    for point in [arrow.start, arrow.middle, arrow.end] {
                         let dot = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
                         context.setFillColor(KlikTheme.selection.cgColor)
                         context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
@@ -892,7 +1213,7 @@ final class CaptureView: NSView {
                         context.fillEllipse(in: dot)
                         context.strokeEllipse(in: dot)
                     }
-                } else if let rect = mark.movableBounds {
+                } else if let rect = mark.selectionBounds {
                     context.setLineDash(phase: 0, lengths: [4, 3])
                     context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
                     context.setLineWidth(3)
@@ -936,9 +1257,19 @@ final class CaptureView: NSView {
         dragPoint = point
         showPalette = false
         showMosaicOptions = false
+        resetScrollUndo()
+        hideSizeFeedback()
         commitText()
         window?.makeFirstResponder(self)
         errorLabel.isHidden = true
+        if event.clickCount == 2, let index = markIndex(at: point), case .text = marks[index] {
+            doubleClickStart = nil
+            drag = nil
+            pendingMarkSelection = nil
+            beginEditingTextMark(at: index)
+            refresh()
+            return
+        }
         if !isDocument, let selection, let handle = Selection.Handle.hit(at: point, in: selection,
                                                              retaining: pointer?.resizeHandle) {
             drag = .resize(handle, selection, point)
@@ -950,19 +1281,20 @@ final class CaptureView: NSView {
             } else if let index = selectedMark, marks.indices.contains(index),
                       let rect = marks[index].resizableBounds, rect.contains(point) {
                 drag = .moveMark(index, marks[index], point, marks)
-            } else if let index = markIndex(at: point) {
-                selectedMark = index
+            } else if let index = selectedMark, marks.indices.contains(index), (marks[index].hitTest(point) || arrowHandle(for: marks[index], at: point) != nil) {
                 let mark = marks[index]
-                if case .arrow(let start, let end, _) = mark,
-                   min(hypot(point.x - start.x, point.y - start.y),
-                       hypot(point.x - end.x, point.y - end.y)) <= 10 {
-                    let isStart = hypot(point.x - start.x, point.y - start.y) <= hypot(point.x - end.x, point.y - end.y)
-                    drag = .resizeArrow(index, mark, isStart, point, marks)
+                if let handle = arrowHandle(for: mark, at: point) {
+                    drag = .resizeArrow(index, mark, handle, point, marks)
                 } else {
                     drag = .moveMark(index, mark, point, marks)
                 }
             } else {
+                let candidate = markIndex(at: point)
                 selectedMark = nil
+                if let candidate, tool == nil || tool == .text {
+                    drag = .selectMark(candidate, point)
+                } else {
+                    if let candidate { pendingMarkSelection = (candidate, point) }
                 switch tool {
             case .text:
                 beginText(at: point, in: selection)
@@ -971,10 +1303,11 @@ final class CaptureView: NSView {
                 if tool == .pen || tool == .mosaic {
                     strokePoints = [point]
                     if tool == .mosaic && mosaicStyle == .solid { strokeColor = .fallback }
-                    preview = tool == .pen ? .pen(strokePoints, ink) : .mosaic(strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
+                    preview = tool == .pen ? .pen(strokePoints, ink, width: penWidth) : .mosaic(strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
                 }
             case .none:
                 if !isDocument { drag = .move(selection, point) }
+                }
                 }
             }
         } else if !isDocument {
@@ -1052,10 +1385,20 @@ final class CaptureView: NSView {
             }
         default: break
         }
+        if case .selectMark(let index, let start) = drag,
+           hypot(point.x - start.x, point.y - start.y) <= 3 {
+            selectedMark = index
+        } else if let pending = pendingMarkSelection,
+                  hypot(point.x - pending.start.x, point.y - pending.start.y) <= 3 {
+            selectedMark = pending.index
+            preview = nil
+        }
+        if selectedMark != nil { syncInkWithSelectedMark() }
         if let preview {
             addMark(preview)
             if case .mosaic(_, _, .solid, _) = preview { pickingCoverColor = true; showMosaicOptions = false }
         }
+        pendingMarkSelection = nil
         self.drag = nil
         draftSelection = nil
         preview = nil
@@ -1164,15 +1507,23 @@ final class CaptureView: NSView {
             let resized = shift ? handle.resizeSquare(rect, delta: delta, in: selection, minimum: Selection.minimum)
                                 : handle.resize(rect, delta: delta, in: selection)
             marks[index] = original.resized(to: resized)
-        case .resizeArrow(let index, let original, let isStart, let grabPoint, _):
-            guard marks.indices.contains(index), let selection,
-                  case .arrow(let start, let end, let ink) = original else { return }
-            let endpoint = isStart ? start : end
-            let moved = CGPoint(x: endpoint.x + point.x - grabPoint.x,
-                                y: endpoint.y + point.y - grabPoint.y)
-            let clamped = CGPoint(x: min(max(moved.x, selection.minX), selection.maxX),
-                                  y: min(max(moved.y, selection.minY), selection.maxY))
-            marks[index] = .arrow(isStart ? clamped : start, isStart ? end : clamped, ink)
+        case .resizeArrow(let index, let original, let handle, let grabPoint, _):
+            guard marks.indices.contains(index), let selection, let arrow = original.arrowGeometry else { return }
+            let handles = [arrow.start, arrow.middle, arrow.end]
+            let old = handles[handle]
+            let target = CGPoint(x: old.x + point.x - grabPoint.x, y: old.y + point.y - grabPoint.y)
+            let clamped = CGPoint(x: min(max(target.x, selection.minX), selection.maxX),
+                                  y: min(max(target.y, selection.minY), selection.maxY))
+            if clamped == old { marks[index] = original; return }
+            if handle == 1 {
+                marks[index] = .curvedArrow(arrow.start, clamped, arrow.end, arrow.ink, width: arrow.width)
+            } else if arrow.curved {
+                marks[index] = .curvedArrow(handle == 0 ? clamped : arrow.start, arrow.middle,
+                                            handle == 2 ? clamped : arrow.end, arrow.ink, width: arrow.width)
+            } else {
+                marks[index] = .arrow(handle == 0 ? clamped : arrow.start,
+                                      handle == 2 ? clamped : arrow.end, arrow.ink, width: arrow.width)
+            }
         case .mark(let tool, let start):
             guard let selection else { return }
             let end = CGPoint(x: min(max(point.x, selection.minX), selection.maxX),
@@ -1182,21 +1533,21 @@ final class CaptureView: NSView {
                 let final = shift ? MarkConstraint.squareEnd(from: start, toward: end, in: selection) : end
                 let rect = Selection.between(start, final)
                 preview = rect.width >= 2 && rect.height >= 2
-                    ? (tool == .ellipse ? .ellipse(rect, ink) : .rectangle(rect, ink)) : nil
+                    ? (tool == .ellipse ? .ellipse(rect, ink, width: shapeWidth) : .rectangle(rect, ink, width: shapeWidth)) : nil
             case .arrow:
                 let final = shift ? MarkConstraint.snappedEnd(from: start, toward: end, in: selection) : end
-                preview = hypot(final.x - start.x, final.y - start.y) >= 2 ? .arrow(start, final, ink) : nil
+                preview = hypot(final.x - start.x, final.y - start.y) >= 2 ? .arrow(start, final, ink, width: shapeWidth) : nil
             case .pen, .mosaic:
                 if strokePoints.last != end { strokePoints.append(end) }
                 if tool == .pen {
-                    preview = .pen(shift ? [start, end] : strokePoints, ink)
+                    preview = .pen(shift ? [start, end] : strokePoints, ink, width: penWidth)
                 } else {
                     preview = .mosaic(shift ? [start, end] : strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
                 }
             case .text:
                 break
             }
-        case .none:
+        case .selectMark, .none:
             break
         }
     }
@@ -1252,11 +1603,6 @@ final class CaptureView: NSView {
         for button in toolbarButtons {
             toolbar.addSubview(button)
         }
-        for divider in toolbarDividers {
-            divider.wantsLayer = true
-            divider.layer?.backgroundColor = KlikTheme.overlayDivider.cgColor
-            toolbar.addSubview(divider)
-        }
         configureSwatch(inkButton, action: #selector(togglePalette))
         inkButton.wantsLayer = true
         KlikTheme.round(inkButton.layer, radius: KlikTheme.controlRadius, clips: false)
@@ -1275,7 +1621,7 @@ final class CaptureView: NSView {
         visible.insert(inkButton, at: Tool.allCases.count)
         let width = min(maximumWidth, MarkupToolbarLayout.width(buttonCount: visible.count))
         toolbar.setFrameSize(CGSize(width: width, height: MarkupToolbarLayout.height))
-        MarkupToolbarLayout.arrange(buttons: visible, dividers: toolbarDividers, width: width)
+        MarkupToolbarLayout.arrange(buttons: visible, width: width)
     }
 
     func pinDocumentToolbar(to host: NSView, inset: CGFloat) -> CGRect {
@@ -1323,6 +1669,7 @@ final class CaptureView: NSView {
             mosaicOptions.setFrameOrigin(CGPoint(x: max(5, min(x, width - mosaicOptions.frame.width - 5)), y: popupY))
             mosaicOptions.select(mosaicStyle)
         }
+
     }
 
     private func buildPalette() {
@@ -1356,6 +1703,7 @@ final class CaptureView: NSView {
     }
 
     private func updateSwatches() {
+        sizeFeedback.ink = ink
         let title = strings(.inkPicker, strings(ink.label))
         inkButton.toolTip = title
         inkButton.setAccessibilityLabel(title)
@@ -1363,9 +1711,38 @@ final class CaptureView: NSView {
         for (color, button) in paletteButtons {
             button.image = MarkupToolbarLayout.swatch(color, selected: color == ink)
         }
+        if pointer == .canvasPoint {
+            let cursor = canvasPointCursor()
+            if isDocument || !systemCursorHidden { cursor.set() }
+            else { pointerView.image = cursor.image }
+        }
+    }
+
+    private func syncInkWithSelectedMark() {
+        guard let index = selectedMark, marks.indices.contains(index), let color = marks[index].editableInk else { return }
+        ink = color
+        updateSwatches()
+    }
+
+    private func applyInk(_ color: Ink) {
+        ink = color
+        if let index = selectedMark, marks.indices.contains(index), let changed = marks[index].withInk(color), changed != marks[index] {
+            let wasMosaic: Bool
+            if case .mosaic = marks[index] { wasMosaic = true } else { wasMosaic = false }
+            undoMarks.append(marks)
+            redoMarks.removeAll()
+            marks[index] = changed
+            resetScrollUndo()
+            background.clearSampleCache()
+            if wasMosaic, recognitionView != nil { rerunRecognitionForCurrentCapture() }
+        }
+        updateSwatches()
+        syncRecognitionMarkup()
+        refresh()
     }
 
     @objc private func togglePalette() {
+        commitText()
         showMosaicOptions = false
         showPalette.toggle()
         refresh()
@@ -1373,7 +1750,7 @@ final class CaptureView: NSView {
 
     @objc private func pickInk(_ sender: NSButton) {
         cancelInkColorPick()
-        ink = Ink.allCases[sender.tag]
+        applyInk(Ink.allCases[sender.tag])
         showPalette = false
         updateSwatches()
         refresh()
@@ -1475,6 +1852,8 @@ final class CaptureView: NSView {
         commitText()
         showPalette = false
         let chosen = Tool.allCases[sender.tag]
+        resetScrollUndo()
+        if tool != chosen { selectedMark = nil }
         if chosen == .mosaic {
             if tool == .mosaic { showMosaicOptions.toggle() }
             else { choose(.mosaic); showMosaicOptions = true }
@@ -1501,13 +1880,16 @@ final class CaptureView: NSView {
         }
     }
 
-    private func beginText(at point: CGPoint, in selection: CGRect) {
+    private func beginText(at point: CGPoint, in selection: CGRect, existing: String? = nil, size: CGFloat? = nil) {
         let area = isDocument ? selection.intersection(visibleRect) : selection
-        let x = min(point.x, max(area.minX, area.maxX - 52))
-        let y = min(point.y, max(area.minY, area.maxY - 24))
+        let x = min(max(area.minX, point.x - (existing == nil ? 0 : 3)), max(area.minX, area.maxX - 52))
+        let y = min(max(area.minY, point.y - (existing == nil ? 0 : 2)), max(area.minY, area.maxY - 24))
         textOrigin = CGPoint(x: x + 3, y: y + 2)
         let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, area.maxX - x)), height: 26))
-        field.font = Mark.textFont
+        let currentSize = size ?? textSize
+        field.font = MarkupTextStyle.font(size: currentSize)
+        field.frame.size.height = max(26, currentSize * 1.4)
+        field.stringValue = existing ?? ""
         field.placeholderString = strings(.textPlaceholder)
         field.isBezeled = true
         field.bezelStyle = .roundedBezel
@@ -1519,15 +1901,66 @@ final class CaptureView: NSView {
         window?.makeFirstResponder(field)
     }
 
+    private func beginEditingTextMark(at index: Int) {
+        guard marks.indices.contains(index), let selection,
+              case .text(let value, let origin, let color, let size) = marks[index] else { return }
+        editingTextMark = (index, marks[index])
+        selectedMark = nil
+        ink = color
+        textSize = size
+        updateSwatches()
+        if let recognitionView {
+            recognitionView.beginMarkupText(at: origin, size: size, existing: value)
+            syncRecognitionMarkup()
+        } else {
+            beginText(at: origin, in: selection, existing: value, size: size)
+        }
+    }
+
+    private func commitTextValue(_ value: String, origin: CGPoint) {
+        let nonempty = !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let editing = editingTextMark {
+            editingTextMark = nil
+            guard marks.indices.contains(editing.index), case .text(_, let oldOrigin, let oldInk, let size) = editing.original else { return }
+            let replacement = Mark.text(value, oldOrigin, oldInk, size: size)
+            if !nonempty || replacement != editing.original {
+                undoMarks.append(marks)
+                redoMarks.removeAll()
+                if nonempty { marks[editing.index] = replacement; selectedMark = editing.index }
+                else { marks.remove(at: editing.index); selectedMark = nil }
+                resetScrollUndo()
+            } else { selectedMark = editing.index }
+        } else if nonempty {
+            addMark(.text(value, origin, ink, size: textSize))
+        }
+    }
+
     private func commitText() {
         guard let field = textField else { return }
-        window?.makeFirstResponder(self)
         let value = field.stringValue
-        if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            addMark(.text(value, textOrigin, ink))
-        }
         textField = nil
         field.removeFromSuperview()
+        window?.makeFirstResponder(self)
+        commitTextValue(value, origin: textOrigin)
+    }
+
+    private func lineTool(for mark: Mark) -> Tool? {
+        switch mark {
+        case .ellipse: return .ellipse
+        case .rectangle: return .rectangle
+        case .arrow, .curvedArrow: return .arrow
+        case .pen: return .pen
+        default: return nil
+        }
+    }
+
+    private func arrowHandle(for mark: Mark, at point: CGPoint) -> Int? {
+        guard let arrow = mark.arrowGeometry else { return nil }
+        let points = [arrow.start, arrow.middle, arrow.end]
+        return points.indices.min(by: { hypot(point.x - points[$0].x, point.y - points[$0].y)
+            < hypot(point.x - points[$1].x, point.y - points[$1].y) }).flatMap {
+                hypot(point.x - points[$0].x, point.y - points[$0].y) <= 10 ? $0 : nil
+            }
     }
 
     private func markIndex(at point: CGPoint) -> Int? {
@@ -1543,10 +1976,25 @@ final class CaptureView: NSView {
         undoMarks.append(marks)
         marks.append(mark)
         redoMarks.removeAll()
-        switch mark {
-        case .arrow, .ellipse, .rectangle: selectedMark = marks.count - 1
-        default: selectedMark = nil
+        selectedMark = nil
+    }
+
+    @discardableResult
+    func deleteSelectedMark() -> Bool {
+        guard drag == nil, !pickingCoverColor, !pickingInkColor, !documentExportInProgress,
+              let index = selectedMark, marks.indices.contains(index) else { return false }
+        let removed = marks[index]
+        undoMarks.append(marks)
+        marks.remove(at: index)
+        redoMarks.removeAll()
+        selectedMark = nil
+        background.clearSampleCache()
+        refresh()
+        if recognitionView != nil {
+            syncRecognitionMarkup()
+            if case .mosaic = removed { rerunRecognitionForCurrentCapture() }
         }
+        return true
     }
 
     @objc func undo() {
@@ -1556,6 +2004,7 @@ final class CaptureView: NSView {
             redoMarks.append(marks)
             marks = prior
             selectedMark = nil
+            resetScrollUndo()
             pickingCoverColor = hasPendingCover
         }
         refresh()
@@ -1567,12 +2016,23 @@ final class CaptureView: NSView {
             undoMarks.append(marks)
             marks = next
             selectedMark = nil
+            resetScrollUndo()
             pickingCoverColor = hasPendingCover
         }
         refresh()
     }
 
-    @objc func cancel() { finish(.cancelled) }
+    func cancelExport() {
+        exportTask?.cancel()
+        exportTask = nil
+        if documentExportInProgress { setDocumentExporting(false) }
+    }
+
+    @objc func cancel() {
+        guard !exportCommitted else { return }
+        cancelExport()
+        finish(.cancelled)
+    }
     @objc private func download() { export(.downloads) }
     @objc private func confirm() { export(.clipboard) }
 
@@ -1602,12 +2062,12 @@ final class CaptureView: NSView {
         let view = TextRecognitionView(frame: bounds, image: image, imageSize: selection.size,
                                        selection: selection, strings: strings)
         view.autoresizingMask = [.width, .height]
-        view.setMarkupHandlers(down: { [weak self] in self?.recognitionMarkupDown($0) },
+        view.setMarkupHandlers(down: { [weak self] point, clicks in self?.recognitionMarkupDown(point, clickCount: clicks) },
                                drag: { [weak self] point, flags in self?.recognitionMarkupDrag(point, flags: flags) },
                                up: { [weak self] point, flags in self?.recognitionMarkupUp(point, flags: flags) },
                                text: { [weak self] value, point in
                                    guard let self else { return }
-                                   self.addMark(.text(value, point, self.ink))
+                                   self.commitTextValue(value, origin: point)
                                    self.syncRecognitionMarkup()
                                })
         view.onPickCoverColor = { [weak self] in self?.beginCoverColorPick() }
@@ -1619,16 +2079,16 @@ final class CaptureView: NSView {
             self?.mosaicOptions.select(style)
         }
         view.setMosaicStyle(mosaicStyle)
-        view.onTool = { [weak self] chosen in
+        view.onTool = { [weak self] chosen, deselect in
             guard let self, !self.pickingCoverColor else { return }
-            self.choose(chosen == .mosaic ? .mosaic : (self.tool == chosen ? nil : chosen))
+            if self.tool != chosen || deselect { self.selectedMark = nil }
+            self.choose(deselect ? nil : chosen)
             self.syncRecognitionMarkup()
         }
         view.onInk = { [weak self] ink in
             guard let self else { return }
             self.cancelInkColorPick()
-            self.ink = ink
-            self.updateSwatches()
+            self.applyInk(ink)
             self.syncRecognitionMarkup()
         }
         view.onRefresh = { [weak self] in self?.requestRecognitionRefresh() }
@@ -1651,6 +2111,8 @@ final class CaptureView: NSView {
         selectionSize.isHidden = true
         clearPointer()
         addSubview(view, positioned: .above, relativeTo: nil)
+        addSubview(sizeFeedback, positioned: .above, relativeTo: view)
+        addSubview(sizeOutline, positioned: .above, relativeTo: sizeFeedback)
         addSubview(modeHint, positioned: .above, relativeTo: view)
         addSubview(brushOutline, positioned: .above, relativeTo: modeHint)
         addSubview(mosaicScrollHint, positioned: .above, relativeTo: brushOutline)
@@ -1682,16 +2144,27 @@ final class CaptureView: NSView {
     }
 
     private func syncRecognitionMarkup() {
+        recognitionRedraw?.cancel()
+        recognitionRedraw = nil
         guard let view = recognitionView, let selection else { return }
-        var displayedMarks = marks
-        if let preview { displayedMarks.append(preview) }
-        if let image = background.render(selection: selection, marks: displayedMarks) {
+        let visibleMarks = marks.enumerated().compactMap { $0.offset == editingTextMark?.index ? nil : $0.element }
+        if let image = background.render(selection: selection, marks: visibleMarks, preview: preview) {
             var points: [CGPoint] = []
             if let index = selectedMark, marks.indices.contains(index) {
                 switch marks[index] {
-                case .ellipse(let rect, _), .rectangle(let rect, _): points = Selection.Handle.allCases.map { $0.center(in: rect) }
-                case .arrow(let start, let end, _): points = [start, end]
-                default: break
+                case .ellipse(let rect, _, _), .rectangle(let rect, _, _): points = Selection.Handle.allCases.map { $0.center(in: rect) }
+                case .arrow, .curvedArrow:
+                    if let arrow = marks[index].arrowGeometry { points = [arrow.start, arrow.middle, arrow.end] }
+                case .mosaic:
+                    if let rect = marks[index].selectionBounds {
+                        points = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                                  CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)]
+                    }
+                default:
+                    if let rect = marks[index].selectionBounds {
+                        points = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                                  CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)]
+                    }
                 }
             }
             view.setImage(image, selectedPoints: points)
@@ -1700,34 +2173,46 @@ final class CaptureView: NSView {
         view.setCanPickCoverColor(canPickCoverColor)
     }
 
-    private func recognitionMarkupDown(_ point: CGPoint) {
+    private func recognitionMarkupDown(_ point: CGPoint, clickCount: Int) {
         guard let selection, selection.contains(point) else { return }
         if pickingInkColor { applyInkColor(at: point); return }
         if pickingCoverColor { applyCoverColor(at: point); return }
         recognitionView?.hideMosaicOptions()
+        resetScrollUndo()
+        hideSizeFeedback()
+        if clickCount == 2, let index = markIndex(at: point), case .text = marks[index] {
+            drag = nil
+            pendingMarkSelection = nil
+            beginEditingTextMark(at: index)
+            return
+        }
         if let index = selectedMark, marks.indices.contains(index),
            let rect = marks[index].resizableBounds, let handle = Selection.Handle.hit(at: point, in: rect) {
             drag = .resizeMark(index, marks[index], handle, point, marks)
         } else if let index = selectedMark, marks.indices.contains(index),
                   let rect = marks[index].resizableBounds, rect.contains(point) {
             drag = .moveMark(index, marks[index], point, marks)
-        } else if let index = markIndex(at: point) {
-            selectedMark = index
+        } else if let index = selectedMark, marks.indices.contains(index), (marks[index].hitTest(point) || arrowHandle(for: marks[index], at: point) != nil) {
             let mark = marks[index]
-            if case .arrow(let start, let end, _) = mark,
-               min(hypot(point.x - start.x, point.y - start.y), hypot(point.x - end.x, point.y - end.y)) <= 10 {
-                let isStart = hypot(point.x - start.x, point.y - start.y) <= hypot(point.x - end.x, point.y - end.y)
-                drag = .resizeArrow(index, mark, isStart, point, marks)
+            if let handle = arrowHandle(for: mark, at: point) {
+                drag = .resizeArrow(index, mark, handle, point, marks)
             } else {
                 drag = .moveMark(index, mark, point, marks)
             }
         } else {
+            let candidate = markIndex(at: point)
             selectedMark = nil
+            if let candidate, tool == nil || tool == .text {
+                drag = .selectMark(candidate, point)
+            } else {
+                if let candidate { pendingMarkSelection = (candidate, point) }
             switch tool {
             case .text:
-                recognitionView?.beginMarkupText(at: point)
+                recognitionView?.beginMarkupText(at: point, size: textSize)
             case .some(let chosen):
                 if chosen == .mosaic {
+                    ocrRefreshWork?.cancel()
+                    ocrRefreshWork = nil
                     recognitionTask?.cancel()
                     recognitionTask = nil
                     if recognitionView?.preserveEditedTextForChangedImage(isDrawing: true) != true {
@@ -1738,10 +2223,11 @@ final class CaptureView: NSView {
                 if chosen == .pen || chosen == .mosaic {
                     strokePoints = [point]
                     if chosen == .mosaic && mosaicStyle == .solid { strokeColor = .fallback }
-                    preview = chosen == .pen ? .pen(strokePoints, ink) : .mosaic(strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
+                    preview = chosen == .pen ? .pen(strokePoints, ink, width: penWidth) : .mosaic(strokePoints, diameter: mosaicDiameter, style: mosaicStyle, color: strokeColor)
                 }
             case .none:
                 break
+            }
             }
         }
         syncRecognitionMarkup()
@@ -1749,14 +2235,30 @@ final class CaptureView: NSView {
 
     private func recognitionMarkupDrag(_ point: CGPoint, flags: NSEvent.ModifierFlags) {
         guard drag != nil else { return }
+        if !recognitionMosaicChanging, case .moveMark(let index, _, let start, _) = drag,
+           point != start, marks.indices.contains(index), case .mosaic = marks[index] {
+            recognitionMosaicChanging = true
+            ocrRefreshWork?.cancel()
+            ocrRefreshWork = nil
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            if recognitionView?.preserveEditedTextForChangedImage(isDrawing: true) != true {
+                recognitionView?.showLoading()
+            }
+        }
         updateDrag(at: point, shift: flags.contains(.shift))
-        syncRecognitionMarkup()
+        if recognitionRedraw == nil {
+            let work = DispatchWorkItem { [weak self] in self?.syncRecognitionMarkup() }
+            recognitionRedraw = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16), execute: work)
+        }
     }
 
     private func recognitionMarkupUp(_ point: CGPoint, flags: NSEvent.ModifierFlags) {
         guard let active = drag else { return }
         updateDrag(at: point, shift: flags.contains(.shift))
-        var refreshOCR = false
+        var refreshOCR = recognitionMosaicChanging
+        recognitionMosaicChanging = false
         if case .mark(.mosaic, _) = active { refreshOCR = true }
         switch active {
         case .moveMark(let index, _, _, let before), .resizeArrow(let index, _, _, _, let before),
@@ -1764,13 +2266,24 @@ final class CaptureView: NSView {
             if before.indices.contains(index), marks.indices.contains(index), before[index] != marks[index] {
                 undoMarks.append(before)
                 redoMarks.removeAll()
+                if case .mosaic = marks[index] { refreshOCR = true }
             }
         default: break
         }
+        if case .selectMark(let index, let start) = active,
+           hypot(point.x - start.x, point.y - start.y) <= 3 {
+            selectedMark = index
+        } else if let pending = pendingMarkSelection,
+                  hypot(point.x - pending.start.x, point.y - pending.start.y) <= 3 {
+            selectedMark = pending.index
+            preview = nil
+        }
+        if selectedMark != nil { syncInkWithSelectedMark() }
         if let preview {
             addMark(preview)
             if case .mosaic(_, _, .solid, _) = preview { pickingCoverColor = true }
         }
+        pendingMarkSelection = nil
         drag = nil
         preview = nil
         strokePoints.removeAll(keepingCapacity: true)
@@ -1807,7 +2320,7 @@ final class CaptureView: NSView {
 
     private func applyInkColor(at point: CGPoint) {
         guard let color = colorForEyedropper(at: point) else { return }
-        ink = .custom(color)
+        applyInk(.custom(color))
         pickingInkColor = false
         eyedropperPreview.isHidden = true
         background.clearSampleCache()
@@ -1870,6 +2383,8 @@ final class CaptureView: NSView {
     }
 
     private func rerunRecognitionForCurrentCapture() {
+        ocrRefreshWork?.cancel()
+        ocrRefreshWork = nil
         recognitionTask?.cancel()
         recognitionTask = nil
         if recognitionView?.preserveEditedTextForChangedImage(isDrawing: false) == true { return }
@@ -1899,11 +2414,16 @@ final class CaptureView: NSView {
     func finishRecognitionMarkupText() { recognitionView?.commitMarkupText() }
 
     func closeTextRecognition() {
+        recognitionRedraw?.cancel()
+        recognitionRedraw = nil
+        ocrRefreshWork?.cancel()
+        ocrRefreshWork = nil
         recognitionView?.commitMarkupText()
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionView?.removeFromSuperview()
         recognitionView = nil
+        recognitionMosaicChanging = false
         window?.makeFirstResponder(self)
         refresh()
         if let window { updatePointer(at: window.mouseLocationOutsideOfEventStream, force: true) }
@@ -1927,28 +2447,46 @@ final class CaptureView: NSView {
             onDocumentExport(destination, image)
             return
         }
-        guard let png = CaptureImage.png(image) else {
-            report(strings(.renderError))
-            return
+        setDocumentExporting(true)
+        let saveOverride = saveDownload
+        exportTask = Task { @MainActor [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try PreparedCaptureExport.make(image: image, destination: destination, saveOverride: saveOverride) }
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            switch result {
+            case .failure(let error):
+                if error as? PreparedCaptureExport.Failure == .download {
+                    self.reportDownloadFailure()
+                } else {
+                    self.report(self.strings(.renderError))
+                }
+            case .success(let prepared):
+                await self.completeExport(destination, prepared: prepared)
+            }
+            self.exportTask = nil
+            self.setDocumentExporting(false)
         }
+    }
 
+    private func completeExport(_ destination: Destination, prepared: PreparedCaptureExport.Result) async {
         switch destination {
         case .clipboard:
-            guard ClipboardImage.write(png: png, image: image, to: pasteboard) else {
+            guard ClipboardImage.write(png: prepared.png, tiff: prepared.tiff, to: pasteboard) else {
                 report(strings(.clipboardError))
                 return
             }
         case .downloads:
-            do {
-                try saveDownload(png)
-            } catch {
-                if let recognitionView { recognitionView.showSaveConfirmation(success: false) }
-                else { downloadButton?.showBriefConfirmation(symbol: "xmark", color: KlikTheme.danger) }
-                report(strings(.downloadError))
+            do { try prepared.download?.commit() }
+            catch {
+                reportDownloadFailure()
                 return
             }
         }
-        recordCapture?(png)
+        exportCommitted = true
+        await recordCapture?(prepared.png)
+        exportCommitted = false
+        guard !Task.isCancelled else { return }
         let confirmationFrame: CGRect?
         if destination == .downloads {
             if let recognitionView {
@@ -1961,6 +2499,12 @@ final class CaptureView: NSView {
         }
         finish(.exported)
         if let confirmationFrame { SaveConfirmation.show(at: confirmationFrame) }
+    }
+
+    private func reportDownloadFailure() {
+        if let recognitionView { recognitionView.showSaveConfirmation(success: false) }
+        else { downloadButton?.showBriefConfirmation(symbol: "xmark", color: KlikTheme.danger) }
+        report(strings(.downloadError))
     }
 
     private func report(_ message: String) {

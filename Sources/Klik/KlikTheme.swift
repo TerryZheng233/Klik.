@@ -1,28 +1,29 @@
 import AppKit
 
 enum KlikTheme {
-    static let primary = rgb(0x41431B)
-    static let accent = rgb(0xAEB784)
-    private static let sand = rgb(0xE3DBBB)
-    private static let cream = rgb(0xF8F3E1)
+    static let primary = rgb(0x3E462B)
+    static let accent = rgb(0xCED99D)
+    private static let sand = rgb(0xE8E2CD)
+    private static let cream = rgb(0xF8F5EA)
     private static let lightOutline = rgb(0xCFC5A1)
 
     // Selection and its contrast halo stay legible over both bright and dark content.
     static let selection = accent
     static let selectionHalo = rgb(0x191B11).withAlphaComponent(0.90)
     static let overlayInk = cream
-    static let overlaySurface = rgb(0x282A1A)
-    static let overlayCanvas = rgb(0x1E2014)
+    static let overlaySurface = rgb(0x2C3223)
+    static let overlayCanvas = rgb(0x20251B)
     static let panelTint = overlaySurface.withAlphaComponent(0.94)
-    static let buttonSelected = rgb(0x4E5137)
+    static let buttonSelected = rgb(0x535E3E)
 
     static let window = adaptive(light: cream, dark: overlaySurface)
-    static let card = adaptive(light: rgb(0xFCF9EE), dark: rgb(0x32341F))
-    static let keycap = adaptive(light: sand, dark: rgb(0x44472B))
+    static let card = adaptive(light: rgb(0xEFEBDE), dark: rgb(0x353D2C))
+    static let keycap = adaptive(light: sand, dark: rgb(0x454E37))
 
     static let windowRadius: CGFloat = 18
     static let cornerRadius: CGFloat = 14
     static let controlRadius: CGFloat = 8
+    static let controlHeight: CGFloat = 30
     static let badgeRadius: CGFloat = 9
 
     static let ink = adaptive(light: primary, dark: cream)
@@ -33,12 +34,9 @@ enum KlikTheme {
     static let actionInk = adaptive(light: cream, dark: overlayCanvas)
     static let danger = adaptive(light: rgb(0xa92d37), dark: rgb(0xff746e))
     static let dangerSurface = adaptive(light: rgb(0xF7E3DC), dark: rgb(0x472D27))
-    static let hover = adaptive(light: sand, dark: buttonSelected)
+    static let hover = adaptive(light: rgb(0xE4DECA), dark: rgb(0x424B36))
     static let overlayMuted = overlayInk.withAlphaComponent(0.82)
     static let overlayOutline = overlayInk.withAlphaComponent(0.15)
-    fileprivate static let panelOutline = adaptive(light: lightOutline, dark: overlayOutline)
-    static let overlayDivider = overlayInk.withAlphaComponent(0.16)
-    static let imageOutline = selection.withAlphaComponent(0.68)
     static let panelShadowInset: CGFloat = 14
 
     @MainActor
@@ -71,13 +69,11 @@ enum KlikTheme {
         layer.add(change, forKey: "klik.backgroundColor")
     }
 
-    static func styleOverlay(_ view: NSView, radius: CGFloat = cornerRadius, opaque: Bool = false) {
+    static func styleOverlay(_ view: NSView, radius: CGFloat = cornerRadius) {
         view.appearance = NSAppearance(named: .darkAqua)
         view.wantsLayer = true
         round(view.layer, radius: radius)
-        view.layer?.backgroundColor = (opaque ? overlaySurface : panelTint).cgColor
-        view.layer?.borderColor = overlayOutline.cgColor
-        view.layer?.borderWidth = 1
+        view.layer?.backgroundColor = overlaySurface.cgColor
     }
 
     @MainActor
@@ -96,7 +92,7 @@ enum KlikTheme {
         round(surface.layer, radius: radius)
         backing.addSubview(surface)
         backing.layer?.shadowColor = NSColor.black.cgColor
-        backing.layer?.shadowOpacity = 0.32
+        backing.layer?.shadowOpacity = 0.22
         backing.layer?.shadowRadius = 8
         backing.layer?.shadowOffset = CGSize(width: 0, height: -3)
         backing.layer?.shadowPath = CGPath(roundedRect: surface.frame, cornerWidth: radius,
@@ -110,8 +106,6 @@ enum KlikTheme {
         view.wantsLayer = true
         round(view.layer, radius: radius)
         view.layer?.backgroundColor = overlayCanvas.cgColor
-        view.layer?.borderWidth = 1
-        view.layer?.borderColor = imageOutline.cgColor
     }
 
     static func styleMarkupField(_ field: NSTextField) {
@@ -168,8 +162,6 @@ private final class PanelSurface: NSView {
     func updateColors() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = KlikTheme.window.cgColor
-            layer?.borderColor = KlikTheme.panelOutline.cgColor
-            layer?.borderWidth = 1
         }
     }
 }
@@ -179,14 +171,14 @@ enum MarkupToolbarLayout {
     static let height: CGFloat = 40
     static let buttonWidth: CGFloat = 33
     static let padding: CGFloat = 5
-    static let separatorWidth: CGFloat = 8
+    static let groupGap: CGFloat = 8
 
     static func styleTray(_ tray: NSVisualEffectView, blending: NSVisualEffectView.BlendingMode = .withinWindow,
-                          radius: CGFloat = KlikTheme.cornerRadius, opaque: Bool = false) {
+                          radius: CGFloat = KlikTheme.cornerRadius) {
         tray.material = .hudWindow
         tray.blendingMode = blending
         tray.state = .active
-        KlikTheme.styleOverlay(tray, radius: radius, opaque: opaque)
+        KlikTheme.styleOverlay(tray, radius: radius)
     }
 
     static func configureButton(_ button: HoverButton, symbol: String, fallback: String? = nil,
@@ -215,19 +207,17 @@ enum MarkupToolbarLayout {
     }
 
     static func width(buttonCount: Int) -> CGFloat {
-        2 * padding + CGFloat(buttonCount) * buttonWidth + 3 * separatorWidth
+        2 * padding + CGFloat(buttonCount) * buttonWidth + 3 * groupGap
     }
 
-    static func arrange(buttons: [NSButton], dividers: [NSView], width: CGFloat) {
+    static func arrange(buttons: [NSButton], width: CGFloat) {
         let positions = [Tool.allCases.count + 1, Tool.allCases.count + 3, buttons.count - 2]
-        let itemWidth = max(1, min(buttonWidth, (width - 2 * padding - 3 * separatorWidth) / CGFloat(buttons.count)))
-        var x = max(0, (width - CGFloat(buttons.count) * itemWidth - 3 * separatorWidth) / 2)
+        let itemWidth = max(1, min(buttonWidth, (width - 2 * padding - 3 * groupGap) / CGFloat(buttons.count)))
+        var x = max(0, (width - CGFloat(buttons.count) * itemWidth - 3 * groupGap) / 2)
         for (index, button) in buttons.enumerated() {
-            if let dividerIndex = positions.firstIndex(of: index) {
-                dividers[dividerIndex].frame = CGRect(x: x + 3, y: 11, width: 1, height: 18)
-                x += separatorWidth
-            }
-            button.frame = CGRect(x: x, y: 5, width: itemWidth, height: 30)
+            if positions.contains(index) { x += groupGap }
+            button.frame = CGRect(x: x, y: (height - KlikTheme.controlHeight) / 2,
+                                  width: itemWidth, height: KlikTheme.controlHeight)
             x += itemWidth
         }
     }

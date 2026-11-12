@@ -32,19 +32,20 @@ final class ScrollCaptureSession: NSObject {
     private let outline: NSPanel
     private let status = NSTextField(wrappingLabelWithString: "")
     private let done = ScrollControlButton()
-    private let record: (Data) -> Void
+    private let record: (Data) async -> Void
     private let finish: () -> Void
     private var task: Task<Void, Never>?
     private var finishTask: Task<Void, Never>?
-    private var source: ScrollFrameSource?
+    private var source: (any ScrollCaptureFrameSource)?
     private var preview: ScrollCapturePreview?
     private var hasExtension = false
     private var finishing = false
+    private var exportCommitted = false
     private var stoppedMessage: UIKey?
     private var unalignedSince: ContinuousClock.Instant?
 
     init(selection: CGRect, screenFrame: CGRect, visibleFrame: CGRect, strings: AppStrings,
-         record: @escaping (Data) -> Void, finish: @escaping () -> Void) {
+         record: @escaping (Data) async -> Void, finish: @escaping () -> Void) {
         self.strings = strings
         self.screenFrame = screenFrame
         self.record = record
@@ -79,28 +80,28 @@ final class ScrollCaptureSession: NSObject {
         let title = NSTextField(labelWithString: strings(.toolScrollCapture))
         title.textColor = KlikTheme.ink
         title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.frame = CGRect(x: 14, y: 50, width: size.width - 28, height: 17)
+        title.frame = CGRect(x: 16, y: 48, width: size.width - 32, height: 17)
         tray.addSubview(title)
         status.font = .systemFont(ofSize: 11)
         status.textColor = KlikTheme.mutedInk
         status.maximumNumberOfLines = 3
-        status.frame = CGRect(x: 14, y: 6, width: size.width - 174, height: 40)
+        status.frame = CGRect(x: 16, y: 6, width: size.width - 184, height: 40)
         tray.addSubview(status)
 
         let cancel = ScrollControlButton(title: strings(.cancel), target: self, action: #selector(cancelCapture))
-        cancel.frame = CGRect(x: size.width - 150, y: 15, width: 67, height: 27)
+        cancel.frame = CGRect(x: size.width - 164, y: 12, width: 70, height: KlikTheme.controlHeight)
         tray.addSubview(cancel)
         done.title = strings(.done)
         done.target = self
         done.action = #selector(complete)
         done.isPrimary = true
         done.isEnabled = false
-        done.frame = CGRect(x: size.width - 79, y: 15, width: 67, height: 27)
+        done.frame = CGRect(x: size.width - 86, y: 12, width: 70, height: KlikTheme.controlHeight)
         tray.addSubview(done)
         setStatus(.scrollStarting)
     }
 
-    func start(prepare: @escaping (Set<CGWindowID>) async throws -> ScrollFrameSource) {
+    func start(prepare: @escaping (Set<CGWindowID>) async throws -> any ScrollCaptureFrameSource) {
         outline.orderFrontRegardless()
         controls.orderFrontRegardless()
         let windowIDs = Set([outline, controls].compactMap { CGWindowID(exactly: $0.windowNumber) })
@@ -207,7 +208,10 @@ final class ScrollCaptureSession: NSObject {
             return
         }
         let window = ScrollCapturePreview(image: image, axis: axis, screenFrame: screenFrame, strings: strings, message: message)
-        window.onCancel = { [weak self] in self?.finish() }
+        window.onCancel = { [weak self] in
+            guard let self, !self.exportCommitted else { return }
+            self.finish()
+        }
         window.onExport = { [weak self] destination, rendered in self?.export(rendered, to: destination) }
         preview = window
         controls.orderOut(nil)
@@ -219,21 +223,32 @@ final class ScrollCaptureSession: NSObject {
         guard let preview, !preview.isExporting else { return }
         preview.isExporting = true
         task = Task { [weak self, weak preview] in
-            let png = await Task.detached(priority: .userInitiated) { CaptureImage.png(image) }.value
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try PreparedCaptureExport.make(image: image, destination: destination) }
+            }.value
             guard let self, let preview, !Task.isCancelled else { return }
             defer { preview.isExporting = false }
-            guard let png else { preview.showStatus(self.strings(.renderError)); return }
+            let prepared: PreparedCaptureExport.Result
+            switch result {
+            case .failure(let error):
+                preview.showStatus(self.strings(error as? PreparedCaptureExport.Failure == .download ? .downloadError : .renderError))
+                return
+            case .success(let value): prepared = value
+            }
             switch destination {
             case .clipboard:
-                guard ClipboardImage.write(png: png, image: image, to: .general) else {
+                guard ClipboardImage.write(png: prepared.png, tiff: prepared.tiff, to: .general) else {
                     preview.showStatus(self.strings(.clipboardError))
                     return
                 }
             case .downloads:
-                do { try CaptureDownload.save(png) }
+                do { try prepared.download?.commit() }
                 catch { preview.showStatus(self.strings(.downloadError)); return }
             }
-            self.record(png)
+            self.exportCommitted = true
+            await self.record(prepared.png)
+            self.exportCommitted = false
+            guard !Task.isCancelled else { return }
             let confirmationFrame = destination == .downloads ? preview.saveButtonScreenFrame : nil
             self.finish()
             if let confirmationFrame { SaveConfirmation.show(at: confirmationFrame) }

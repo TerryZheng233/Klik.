@@ -4,6 +4,7 @@ import AppKit
 class HoverButton: NSButton {
     private var hoverTracking: NSTrackingArea?
     private(set) var hovered = false
+    var coachHighlighted = false { didSet { updateSurface(animated: true) } }
     var toolSelected = false {
         didSet {
             contentTintColor = toolSelected ? KlikTheme.accent : KlikTheme.overlayInk
@@ -55,16 +56,12 @@ class HoverButton: NSButton {
         KlikTheme.round(layer, radius: KlikTheme.controlRadius, clips: false)
         let showHover = hovered && isEnabled
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let base = toolSelected ? KlikTheme.buttonSelected : KlikTheme.hover.withAlphaComponent(0.72)
+            let base = toolSelected || coachHighlighted ? KlikTheme.buttonSelected : KlikTheme.hover
             let pressed = isHighlighted && isEnabled
             let color = pressed ? (base.blended(withFraction: 0.18, of: KlikTheme.action) ?? base) : base
-            let fill = (toolSelected || showHover || pressed) ? color : KlikTheme.overlaySurface.withAlphaComponent(0)
+            let fill = (toolSelected || coachHighlighted || showHover || pressed) ? color : NSColor.clear
             KlikTheme.setBackground(fill.cgColor, on: layer, animated: animated && window?.isVisible == true)
         }
-        layer.shadowColor = NSColor.black.cgColor
-        layer.shadowOpacity = showHover ? 0.16 : 0
-        layer.shadowRadius = 3
-        layer.shadowOffset = CGSize(width: 0, height: -1)
     }
 }
 

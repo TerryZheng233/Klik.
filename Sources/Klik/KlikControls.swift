@@ -3,12 +3,19 @@ import AppKit
 class ForestButton: HoverButton {
     var isPrimary = false { didSet { updateSurface(animated: true) } }
     var isDestructive = false { didSet { updateSurface(animated: true) } }
-    private var focusBorder: NSColor { isPrimary && isEnabled ? KlikTheme.actionInk : KlikTheme.action }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        isBordered = false
+        focusRingType = .exterior
+    }
+
+    required init?(coder: NSCoder) { nil }
+
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
 
     override var intrinsicContentSize: NSSize {
         let size = super.intrinsicContentSize
-        return NSSize(width: max(size.width, 65), height: 26)
+        return NSSize(width: max(size.width + 16, 72), height: KlikTheme.controlHeight)
     }
 
     override func updateSurface(animated: Bool) {
@@ -23,29 +30,15 @@ class ForestButton: HoverButton {
             let fill = amount > 0 && isEnabled ? (base.blended(withFraction: amount, of: tone) ?? base) : base
             KlikTheme.setBackground(fill.cgColor, on: layer,
                                     animated: animated && window?.isVisible == true)
-            layer.borderWidth = 1
-            let border = isDestructive ? KlikTheme.danger : KlikTheme.outline
-            layer.borderColor = (window?.firstResponder === self ? focusBorder : border).cgColor
         }
         needsDisplay = true
     }
 
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted {
-            effectiveAppearance.performAsCurrentDrawingAppearance { layer?.borderColor = focusBorder.cgColor }
-        }
-        return accepted
-    }
+    override var focusRingMaskBounds: NSRect { bounds }
 
-    override func resignFirstResponder() -> Bool {
-        let resigned = super.resignFirstResponder()
-        if resigned {
-            effectiveAppearance.performAsCurrentDrawingAppearance {
-                layer?.borderColor = (isDestructive ? KlikTheme.danger : KlikTheme.outline).cgColor
-            }
-        }
-        return resigned
+    override func drawFocusRingMask() {
+        let radius = KlikTheme.controlRadius
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -54,7 +47,7 @@ class ForestButton: HoverButton {
         paragraph.lineBreakMode = .byTruncatingTail
         let ink = isDestructive ? KlikTheme.danger : (isPrimary ? KlikTheme.actionInk : KlikTheme.ink)
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13),
+            .font: NSFont.systemFont(ofSize: 13, weight: isPrimary ? .semibold : .medium),
             .foregroundColor: isEnabled ? ink : KlikTheme.mutedInk,
             .paragraphStyle: paragraph
         ]
@@ -85,8 +78,5 @@ final class ForestSliderCell: NSSliderCell {
                                              width: side, height: side))
         KlikTheme.action.setFill()
         disc.fill()
-        KlikTheme.card.setStroke()
-        disc.lineWidth = 1
-        disc.stroke()
     }
 }

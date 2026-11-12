@@ -38,25 +38,27 @@ I love how easy it is to take a screenshot in WeChat. But confirming one always 
 | **Hold Shift while selecting** | Keep the region square. Its pixel dimensions update at the top left |
 | **Click before selecting** | Select the whole display under your pointer |
 | **Hold Space and click** | Select a window, including the parts another window covers |
-| **Double-click** | Copy the selection when no annotation tool is active. Hold Space and double-click to copy a window |
+| **Double-click** | Copy an empty part of the selection when no annotation tool is active. Double-click text to edit it. Hold Space and double-click to copy a window |
 | **Enter** or **✓** | Copy the screenshot with your annotations |
 | **Save PNG button (↓)** | Save a PNG in the selected folder (Downloads by default) |
 | **Esc** or **×** | Cancel the capture |
 | **⌘Z** | Undo your last annotation |
 | **⇧⌘Z** | Redo an annotation you just undid |
 | **Recognize Text** | Recognize text on this Mac, then review or edit it before copying |
-| **Scroll over a mosaic brush** | Adjust the brush width |
+| **Scroll over the capture** | Adjust the selected annotation or current tool’s size |
 | **Hold Shift while drawing** | Draw a straight pen or mosaic stroke, a circle, a square, or an arrow snapped to 45° |
 
 Want to capture a partly covered window? Hold **Space**, point to any visible part, and click to select the full window. A magnifier appears as you drag or adjust a selection, so you can line up the edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
 
-Drag a box, arrow, text, or pen mark if you want to move it. You can resize a box using its handles or adjust an arrow by dragging an endpoint. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
+Click a box, arrow, text, or pen mark to show its outline or handles, then drag it to move it. Drawing near an unselected mark creates a new mark. Double-click text to edit it; select an annotation and choose a color to change it. Scroll over the capture to adjust the active tool’s stroke width or text size. Select an existing mark first to adjust that mark. In a scrolling screenshot preview, hold **Option** while scrolling to adjust; scroll normally to browse. You can resize a box using its handles or adjust an arrow by dragging an endpoint, or bend it by dragging its middle handle. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
 
 ![Klik. adding a rectangle and text to a webpage screenshot, with the annotation toolbar visible.](docs/klik-markup-demo.png)
 
 ![Klik. covering text with pixelation and a soft brush.](docs/klik-mosaic-demo.png)
 
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
+
+To move or remove a cover stroke, click it to select it, then drag it or press **Delete**. Press **⌘Z** to restore it. In recent screenshot previews, choose **Delete**, then **Confirm** to remove one image.
 
 ## Scrolling screenshots
 

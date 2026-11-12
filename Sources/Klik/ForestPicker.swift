@@ -12,22 +12,21 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
         super.init(frame: buttonFrame, pullsDown: flag)
         choicePopover.behavior = .transient
         choicePopover.delegate = self
-        focusRingType = .none
+        focusRingType = .exterior
     }
 
     required init?(coder: NSCoder) { nil }
 
     override var isFlipped: Bool { true }
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: super.intrinsicContentSize.width, height: KlikTheme.controlHeight)
+    }
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
 
     override func draw(_ dirtyRect: NSRect) {
-        let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let shape = NSBezierPath(roundedRect: rect, xRadius: KlikTheme.controlRadius, yRadius: KlikTheme.controlRadius)
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: KlikTheme.controlRadius, yRadius: KlikTheme.controlRadius)
         KlikTheme.keycap.setFill()
         shape.fill()
-        (window?.firstResponder === self ? KlikTheme.action : KlikTheme.outline).setStroke()
-        shape.lineWidth = 1
-        shape.stroke()
         let title = (selectedItem?.title ?? "") as NSString
         let font = NSFont.systemFont(ofSize: 13)
         let style = NSMutableParagraphStyle()
@@ -50,6 +49,13 @@ final class ForestPicker: NSPopUpButton, NSPopoverDelegate {
         chevrons.line(to: NSPoint(x: x + 3, y: y + 1.5))
         KlikTheme.ink.setStroke()
         chevrons.stroke()
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        let radius = KlikTheme.controlRadius
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
     }
 
     override func mouseDown(with event: NSEvent) {

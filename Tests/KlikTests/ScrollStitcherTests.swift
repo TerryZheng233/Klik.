@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import CoreText
 import XCTest
@@ -168,6 +169,52 @@ final class ScrollStitcherTests: XCTestCase {
                        CaptureImage.png(try frame(111, width: 477 - 111 + 240)))
     }
 
+    @MainActor
+    func testScrollSessionEnablesDoneAndOpensFullSizePreview() async throws {
+        _ = NSApplication.shared
+        let document = try page(height: 900)
+        let first = try crop(document, y: 0, height: viewportHeight)
+        let second = try crop(document, y: 71, height: viewportHeight)
+        let source = FixtureScrollSource([first, second])
+        let strings = AppStrings(language: .english)
+        let screen = CGRect(x: -3000, y: -3000, width: 1000, height: 800)
+        let existing = Set(NSApp.windows.map(\.windowNumber))
+        let session = ScrollCaptureSession(
+            selection: CGRect(x: 100, y: 100, width: width, height: viewportHeight),
+            screenFrame: screen, visibleFrame: screen, strings: strings,
+            record: { _ in XCTFail("Preview should not write history") },
+            finish: { XCTFail("Completing capture should open a preview") }
+        )
+        defer { session.close() }
+
+        func views(in view: NSView) -> [NSView] { [view] + view.subviews.flatMap(views) }
+        func visibleSurface(_ identifier: String) -> NSView? {
+            NSApp.windows.lazy.filter { $0.isVisible && !existing.contains($0.windowNumber) }
+                .compactMap(\.contentView).flatMap { views(in: $0) }
+                .first { $0.identifier?.rawValue == identifier }
+        }
+        func wait<T>(for value: () -> T?) async throws -> T {
+            let deadline = ContinuousClock.now + .seconds(3)
+            while ContinuousClock.now < deadline {
+                if let result = value() { return result }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            return try XCTUnwrap(value(), "Timed out waiting for scroll capture state")
+        }
+
+        session.start { _ in source }
+        let controls = try XCTUnwrap(visibleSurface("scrollControlSurface"))
+        let done = try XCTUnwrap(views(in: controls).compactMap { $0 as? NSButton }
+            .first { $0.title == strings(.done) })
+        XCTAssertFalse(done.isEnabled)
+        _ = try await wait { done.isEnabled ? true : nil }
+        done.performClick(nil)
+        let preview = try await wait { visibleSurface("scrollPreviewSurface") }
+        XCTAssertNil(visibleSurface("scrollControlSurface"))
+        XCTAssertTrue(views(in: preview).compactMap { $0 as? NSTextField }
+            .contains { $0.stringValue == strings(.scrollDimensions, width, viewportHeight + 71) })
+    }
+
     private func crop(_ document: CGImage, y: Int, height: Int) throws -> CGImage {
         try XCTUnwrap(document.cropping(to: CGRect(x: 0, y: y, width: width, height: height)))
     }
@@ -189,4 +236,24 @@ final class ScrollStitcherTests: XCTestCase {
         }
         return try XCTUnwrap(context.makeImage())
     }
+}
+
+
+@MainActor
+private final class FixtureScrollSource: ScrollCaptureFrameSource {
+    let frames: AsyncThrowingStream<CGImage, Error>
+    private let continuation: AsyncThrowingStream<CGImage, Error>.Continuation
+    private let images: [CGImage]
+
+    init(_ images: [CGImage]) {
+        (frames, continuation) = AsyncThrowingStream<CGImage, Error>.makeStream()
+        self.images = images
+    }
+
+    func start() async throws {
+        for image in images { continuation.yield(image) }
+    }
+
+    func finishFrames() { continuation.finish() }
+    func stop() async { finishFrames() }
 }

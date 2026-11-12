@@ -38,12 +38,15 @@
 "captureFailed" = "Couldn’t capture the screen";
 "displayChanged" = "The display configuration changed. Try capturing again.";
 "overlayFocus" = "Klik. couldn’t focus the capture overlay. Try capturing again.";
-"toolEllipse" = "Ellipse";
-"toolRectangle" = "Rectangle";
-"toolArrow" = "Arrow";
-"toolPen" = "Pen";
-"toolText" = "Text";
-"toolMosaic" = "Mosaic Brush (scroll to adjust size)";
+"toolEllipse" = "Ellipse (scroll to change width; Option-scroll in long screenshots)";
+"toolRectangle" = "Rectangle (scroll to change width; Option-scroll in long screenshots)";
+"toolArrow" = "Arrow (scroll to change width; Option-scroll in long screenshots; drag the middle handle to bend)";
+"wheelMosaicSize" = "Mosaic size";
+"penWidth" = "Line thickness";
+"textSize" = "Text size";
+"toolPen" = "Pen (scroll to change width; Option-scroll in long screenshots)";
+"toolText" = "Text (scroll to change size; Option-scroll in long screenshots)";
+"toolMosaic" = "Mosaic Brush (scroll to resize; Option-scroll in long screenshots; click a stroke to select, move, or delete)";
 "toolUndo" = "Undo (⌘Z)";
 "toolRedo" = "Redo (⇧⌘Z)";
 "toolDownload" = "Save PNG";
@@ -91,6 +94,8 @@
 "menuSettings" = "Settings…";
 "menuHistory" = "Recent Screenshots";
 "menuHistoryEmpty" = "No recent screenshots";
+"historyDelete" = "Delete";
+"historyDeleteConfirmHint" = "Click again to delete this screenshot.";
 "menuHistoryClear" = "Clear All";
 "menuHistoryConfirmClear" = "Confirm";
 "menuHistoryConfirmClearHint" = "Click again to clear screenshot history.";
@@ -139,8 +144,8 @@
 "ocrSaveImage" = "Save Image";
 "ocrSaveImageHint" = "Save PNG (Enter; ⌘Enter while editing text)";
 
-"ocrCancel" = "Cancel Capture";
-"ocrConfirm" = "Copy Image and Finish";
+"ocrCancel" = "Cancel Capture (Esc)";
+"ocrConfirm" = "Copy Image and Finish (button)";
 
 "saveLocation" = "Save location";
 "chooseSaveLocation" = "Choose Folder…";
@@ -183,4 +188,4 @@
 "scrollPreviewTitle" = "Scrolling Screenshot Preview";
 "scrollDimensions" = "%lld × %lld px";
 "scrollProgressWide" = "%lld px wide. Keep scrolling or click Done.";
-"scrollMosaicHint" = "Mosaic (hold Option and scroll to resize)";
+"scrollMosaicHint" = "Mosaic (Option-scroll to resize; click a stroke to select, move, or delete)";

@@ -109,6 +109,9 @@ enum UIKey: String, CaseIterable {
     case toolRectangle
     case toolArrow
     case toolPen
+    case penWidth
+    case wheelMosaicSize
+    case textSize
     case toolText
     case toolMosaic
     case mosaicPixel
@@ -170,6 +173,8 @@ enum UIKey: String, CaseIterable {
     case menuHistory
     case menuHistoryEmpty
     case menuHistoryClear
+    case historyDelete
+    case historyDeleteConfirmHint
     case menuHistoryConfirmClear
     case menuHistoryConfirmClearHint
     case historyToday

@@ -122,6 +122,105 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
+    func testScrollingPreviewUsesOptionForSizeAndPreservesNormalScrolling() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let context = try XCTUnwrap(CaptureImage.bitmap(width: 360, height: 1_600))
+        let preview = ScrollCapturePreview(image: try XCTUnwrap(context.makeImage()), axis: .vertical,
+                                           screenFrame: CGRect(x: -2_000, y: -2_000, width: 900, height: 720),
+                                           strings: strings, message: nil)
+        defer { preview.orderOut(nil) }
+        func views(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(views) }
+        let children = views(try XCTUnwrap(preview.contentView))
+        let scroll = try XCTUnwrap(children.compactMap { $0 as? NSScrollView }.first)
+        let canvas = try XCTUnwrap(scroll.documentView as? CaptureView)
+        try XCTUnwrap(children.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolPen) }).performClick(nil)
+        let y = canvas.visibleRect.midY
+        let point = canvas.convert(CGPoint(x: canvas.bounds.midX, y: y), to: nil)
+        XCTAssertFalse(canvas.adjustMarkupSize(delta: 4, precise: false, at: point))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 8, precise: true, at: point, modifiers: .option))
+        let start = canvas.convert(CGPoint(x: canvas.bounds.midX - 50, y: y), to: nil)
+        let end = canvas.convert(CGPoint(x: canvas.bounds.midX + 50, y: y), to: nil)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: preview))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: preview))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: preview))
+        XCTAssertEqual(canvas.marks.last?.lineWidth, 4.5)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: preview))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: preview))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 1, precise: false, at: point, modifiers: .option))
+        XCTAssertEqual(canvas.marks.last?.lineWidth, 5.5)
+    }
+
+    @MainActor
+    func testDoubleClickEditsTextInScrollingPreview() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let context = try XCTUnwrap(CaptureImage.bitmap(width: 360, height: 1600))
+        let panel = ScrollCapturePreview(image: try XCTUnwrap(context.makeImage()), axis: .vertical,
+                                         screenFrame: CGRect(x: -2000, y: -2000, width: 900, height: 720), strings: strings, message: nil)
+        defer { panel.orderOut(nil) }
+        func views(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(views) }
+        let children = views(try XCTUnwrap(panel.contentView))
+        let scroll = try XCTUnwrap(children.compactMap { $0 as? NSScrollView }.first)
+        let canvas = try XCTUnwrap(scroll.documentView as? CaptureView)
+        try XCTUnwrap(children.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolText) }).performClick(nil)
+        let position = CGPoint(x: canvas.bounds.midX, y: canvas.visibleRect.midY)
+        let windowPoint = canvas.convert(position, to: nil)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: windowPoint, in: panel))
+        let input = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        input.stringValue = "Long image"
+        canvas.finishTextEditing()
+        guard case .text(_, let origin, _, _) = try XCTUnwrap(canvas.marks.first) else { return XCTFail("Missing text") }
+        let hit = canvas.convert(CGPoint(x: origin.x + 6, y: origin.y + 6), to: nil)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: hit, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: hit, in: panel))
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: hit, in: panel, count: 2))
+        let edit = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(edit.stringValue, "Long image")
+        edit.stringValue = "Updated"
+        canvas.finishTextEditing()
+        XCTAssertEqual(canvas.marks.first, .text("Updated", origin, .red, size: 18))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, .text("Long image", origin, .red, size: 18))
+    }
+
+    @MainActor
+    func testBendArrowInScrollingPreview() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let context = try XCTUnwrap(CaptureImage.bitmap(width: 360, height: 1_600))
+        let preview = ScrollCapturePreview(image: try XCTUnwrap(context.makeImage()), axis: .vertical,
+                                           screenFrame: CGRect(x: -2_000, y: -2_000, width: 900, height: 720),
+                                           strings: strings, message: nil)
+        defer { preview.orderOut(nil) }
+        func views(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(views) }
+        let children = views(try XCTUnwrap(preview.contentView))
+        let scroll = try XCTUnwrap(children.compactMap { $0 as? NSScrollView }.first)
+        let canvas = try XCTUnwrap(scroll.documentView as? CaptureView)
+        try XCTUnwrap(children.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolArrow) }).performClick(nil)
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try mouse(type, at: canvas.convert(point, to: nil), in: preview)
+        }
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try event(.leftMouseDown, start))
+            canvas.mouseDragged(with: try event(.leftMouseDragged, end))
+            canvas.mouseUp(with: try event(.leftMouseUp, end))
+        }
+        let y = canvas.visibleRect.midY
+        try drag(CGPoint(x: canvas.bounds.midX - 60, y: y), CGPoint(x: canvas.bounds.midX + 60, y: y))
+        let original = try XCTUnwrap(canvas.marks.first?.arrowGeometry)
+        let select = CGPoint(x: original.start.x + (original.end.x - original.start.x) / 6,
+                             y: original.start.y + (original.end.y - original.start.y) / 6)
+        canvas.mouseDown(with: try event(.leftMouseDown, select))
+        canvas.mouseUp(with: try event(.leftMouseUp, select))
+        try drag(original.middle, CGPoint(x: original.middle.x, y: original.middle.y + 40))
+        let arrow = try XCTUnwrap(canvas.marks.first?.arrowGeometry)
+        XCTAssertTrue(arrow.curved)
+        XCTAssertEqual(arrow.middle.y, original.middle.y + 40, accuracy: 0.1)
+    }
+
+    @MainActor
     func testStitchedPreviewExportsMarksFromSeparateViewports() throws {
         _ = NSApplication.shared
         let strings = AppStrings(language: .english)
@@ -173,7 +272,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testSelectionBadgeShowsExportPixelsAndTracksShiftImmediately() throws {
+    func testSelectionBadgeShowsExportPixelsAndTracksShiftImmediately() async throws {
         _ = NSApplication.shared
         let strings = AppStrings(language: .english)
         let source = try XCTUnwrap(CaptureImage.bitmap(width: 1_280, height: 960)?.makeImage())
@@ -218,6 +317,7 @@ final class CapturePanelTests: XCTestCase {
         let save = try XCTUnwrap(canvas.subviews.flatMap(\.subviews).compactMap { $0 as? NSButton }
             .first { $0.toolTip == strings(.toolDownload) })
         save.performClick(nil)
+        try await waitForCaptureExport(canvas)
         let png = try XCTUnwrap(exported)
         let imageSource = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
         let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(imageSource, 0, nil))
@@ -260,7 +360,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testSelectedRegionCanBeCopiedByDoubleClickOrEnter() throws {
+    func testSelectedRegionCanBeCopiedByDoubleClickOrEnter() async throws {
         _ = NSApplication.shared
         let image = try testImage()
         for useEnter in [false, true] {
@@ -290,6 +390,7 @@ final class CapturePanelTests: XCTestCase {
                     canvas.mouseUp(with: try mouse(.leftMouseUp, at: middle, in: panel, count: count))
                 }
             }
+            try await waitForCaptureExport(canvas)
             XCTAssertEqual(outcome, .exported)
             let png = try XCTUnwrap(board.data(forType: .png))
             let source = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
@@ -300,7 +401,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testDoubleClickCopiesDisplay() throws {
+    func testDoubleClickCopiesDisplay() async throws {
         _ = NSApplication.shared
         let image = try testImage()
         let board = NSPasteboard.withUniqueName()
@@ -324,6 +425,7 @@ final class CapturePanelTests: XCTestCase {
             canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel, count: count))
             canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel, count: count))
         }
+        try await waitForCaptureExport(canvas)
         XCTAssertEqual(outcome, .exported)
         XCTAssertNotNil(board.data(forType: .png))
         XCTAssertEqual(recorded, board.data(forType: .png))
@@ -365,7 +467,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testDoubleClickCopiesMenuFromFrozenScreen() throws {
+    func testDoubleClickCopiesMenuFromFrozenScreen() async throws {
         _ = NSApplication.shared
         let image = try testImage()
         let board = NSPasteboard.withUniqueName()
@@ -382,6 +484,7 @@ final class CapturePanelTests: XCTestCase {
             canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel, count: count))
             canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel, count: count))
         }
+        try await waitForCaptureExport(canvas)
         XCTAssertEqual(outcome, .exported)
         let data = try XCTUnwrap(board.data(forType: .png))
         let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
@@ -423,6 +526,22 @@ final class CapturePanelTests: XCTestCase {
         canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel))
         canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel))
         XCTAssertFalse(toolbar.isHidden)
+    }
+
+    @MainActor
+    func testCanvasPointUsesInkColor() throws {
+        _ = NSApplication.shared
+        func center(_ ink: Ink) throws -> NSColor {
+            let data = try XCTUnwrap(CaptureView.Pointer.canvasPointCursor(for: ink).image.tiffRepresentation)
+            let bitmap = try XCTUnwrap(NSBitmapImageRep(data: data))
+            return try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2))
+                .usingColorSpace(.sRGB) ?? .clear
+        }
+        let red = try center(.red), blue = try center(.blue)
+        XCTAssertGreaterThan(red.redComponent, red.blueComponent)
+        XCTAssertGreaterThan(blue.blueComponent, blue.redComponent)
+        let custom = try center(.custom(CoverColor(red: 0.15, green: 0.8, blue: 0.3)))
+        XCTAssertGreaterThan(custom.greenComponent, custom.redComponent)
     }
 
     @MainActor
@@ -475,7 +594,7 @@ final class CapturePanelTests: XCTestCase {
         canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 160, y: 340)))
         canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 230, y: 310), shift: true))
         canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 230, y: 310), shift: true))
-        guard case .rectangle(let square, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing rectangle") }
+        guard case .rectangle(let square, _, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing rectangle") }
         XCTAssertEqual(square.width, square.height, accuracy: 0.001)
         try button(.toolRecognizeText, toolbar).performClick(nil)
         try await Task.sleep(for: .milliseconds(50))
@@ -489,7 +608,7 @@ final class CapturePanelTests: XCTestCase {
         image.mouseDown(with: try event(.leftMouseDown, a))
         image.mouseDragged(with: try event(.leftMouseDragged, b, shift: true))
         image.mouseUp(with: try event(.leftMouseUp, c, shift: true))
-        guard case .pen(let points, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing line") }
+        guard case .pen(let points, _, _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("missing line") }
         XCTAssertEqual(points.count, 2)
         XCTAssertEqual(points[0].x, 300, accuracy: 0.01)
         XCTAssertEqual(points[1].x, 400, accuracy: 0.01)
@@ -606,7 +725,7 @@ final class CapturePanelTests: XCTestCase {
         XCTAssertEqual(canvas.mosaicDiameter, 10)
         XCTAssertTrue(canvas.adjustMosaicSize(delta: 1000, precise: true, at: CGPoint(x: 300, y: 250)))
         XCTAssertEqual(canvas.mosaicDiameter, 100)
-        let outline = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "mosaicBrushOutline" })
+        let outline = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "markupSizeOutline" })
         XCTAssertFalse(outline.isHidden)
         XCTAssertEqual(outline.frame.width, 104, accuracy: 0.01)
     }
@@ -623,6 +742,286 @@ final class CapturePanelTests: XCTestCase {
         let practiced = MosaicScrollHintPolicy(defaults: defaults)
         practiced.didScroll()
         XCTAssertFalse(MosaicScrollHintPolicy(defaults: defaults).shouldShow)
+    }
+
+    @MainActor
+    func testWheelAdjustsDefaultsAndSelectedMarksWithUndo() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        func button(_ key: UIKey) throws -> NSButton {
+            try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(key) })
+        }
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+        try drag(CGPoint(x: 100, y: 420), CGPoint(x: 520, y: 50))
+        let wheelPoint = CGPoint(x: 450, y: 100)
+        try button(.toolRectangle).performClick(nil)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 22, precise: true, at: wheelPoint))
+        try drag(CGPoint(x: 160, y: 350), CGPoint(x: 220, y: 290))
+        XCTAssertEqual(canvas.marks.first?.lineWidth, 8)
+        try button(.toolEllipse).performClick(nil)
+        try drag(CGPoint(x: 290, y: 350), CGPoint(x: 350, y: 290))
+        XCTAssertEqual(canvas.marks.last?.lineWidth, 8)
+        let rectangleEdge = CGPoint(x: 160, y: 320)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: rectangleEdge, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: rectangleEdge, in: panel))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 12, precise: true, at: wheelPoint))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 12, precise: true, at: wheelPoint))
+        XCTAssertEqual(canvas.marks[0].lineWidth, 14)
+        XCTAssertEqual(canvas.marks[1].lineWidth, 8)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks[0].lineWidth, 8)
+        canvas.redo()
+        XCTAssertEqual(canvas.marks[0].lineWidth, 14)
+        try button(.toolPen).performClick(nil)
+        try drag(CGPoint(x: 310, y: 220), CGPoint(x: 400, y: 220))
+        XCTAssertEqual(canvas.marks.last?.lineWidth, 2.5)
+        // Small precise deltas must accumulate rather than being rounded away.
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 0.2, precise: true, at: wheelPoint))
+        try drag(CGPoint(x: 310, y: 170), CGPoint(x: 400, y: 170))
+        XCTAssertEqual(try XCTUnwrap(canvas.marks.last?.lineWidth), 2.55, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testWheelAdjustsTextBeforeAndAfterCreation() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolText) }).performClick(nil)
+        let wheelPoint = CGPoint(x: 450, y: 100)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 24, precise: true, at: wheelPoint))
+        let preview = try XCTUnwrap(canvas.subviews.compactMap { $0 as? TextSizePreview }.first { $0.identifier?.rawValue == "markupSizeFeedback" })
+        XCTAssertFalse(preview.isHidden)
+        XCTAssertEqual(preview.fontSize, 30)
+        XCTAssertEqual(preview.ink, .red)
+        let pointerPoint = canvas.convert(wheelPoint, from: nil)
+        XCTAssertLessThan(preview.frame.maxX, pointerPoint.x)
+        XCTAssertEqual(preview.frame.midY, pointerPoint.y, accuracy: 0.01)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 300, y: 300), in: panel))
+        XCTAssertTrue(preview.isHidden)
+        let field = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(field.font?.pointSize, preview.fontSize)
+        field.stringValue = "Hello"
+        XCTAssertFalse(canvas.adjustMarkupSize(delta: 1, precise: false, at: wheelPoint))
+        canvas.finishTextEditing()
+        guard case .text(_, let origin, _, let original) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(original, 30)
+        let click = CGPoint(x: origin.x + 6, y: 480 - origin.y - 6)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: click, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: click, in: panel))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 20, precise: true, at: wheelPoint))
+        guard case .text(_, _, _, let changed) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(changed, 40)
+        canvas.undo()
+        guard case .text(_, _, _, let undone) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(undone, 30)
+    }
+
+    @MainActor
+    func testDoubleClickEditsTextAndRecolorsSelectedMarkWithUndo() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480), image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        func click(_ point: CGPoint, count: Int = 1) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel, count: count))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel, count: count))
+        }
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolText) }).performClick(nil)
+        try click(CGPoint(x: 260, y: 300))
+        let field = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        field.stringValue = "Original"
+        canvas.finishTextEditing()
+        let original = try XCTUnwrap(canvas.marks.first)
+        guard case .text(_, let origin, _, _) = original else { return XCTFail("Missing text") }
+        let point = CGPoint(x: origin.x + 6, y: 480 - origin.y - 6)
+        try click(point)
+        try click(point, count: 2)
+        let edit = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(edit.stringValue, "Original")
+        XCTAssertEqual(edit.font?.pointSize, 18)
+        edit.stringValue = "Revised"
+        canvas.finishTextEditing()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .red, size: 18))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, original)
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .red, size: 18))
+        try click(point)
+        let color = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkPicker, strings(.inkRed)) })
+        color.performClick(nil)
+        let palette = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSVisualEffectView }.first { $0 !== toolbar && !$0.isHidden && $0.subviews.count == Ink.allCases.count + 1 })
+        try XCTUnwrap(palette.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkBlue) }).performClick(nil)
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .blue, size: 18))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .red, size: 18))
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .blue, size: 18))
+        canvas.undo()
+        try click(point)
+        try click(point, count: 2)
+        let unchanged = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(unchanged.stringValue, "Revised")
+        canvas.finishTextEditing()
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .blue, size: 18), "Unchanged edits must preserve redo")
+        try click(point)
+        try click(point, count: 2)
+        let empty = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        empty.stringValue = ""
+        canvas.finishTextEditing()
+        XCTAssertTrue(canvas.marks.isEmpty)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .blue, size: 18))
+        canvas.redo()
+        XCTAssertTrue(canvas.marks.isEmpty)
+        canvas.undo()
+        try click(point)
+        try click(point, count: 2)
+        let pending = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        pending.stringValue = "Edited again"
+        let colorButton = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkPicker, strings(.inkBlue)) })
+        colorButton.performClick(nil)
+        XCTAssertNil(pending.superview)
+        let secondPalette = try XCTUnwrap(canvas.subviews.compactMap { $0 as? NSVisualEffectView }.first { $0 !== toolbar && !$0.isHidden && $0.subviews.count == Ink.allCases.count + 1 })
+        try XCTUnwrap(secondPalette.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkGreen) }).performClick(nil)
+        XCTAssertEqual(canvas.marks.first, .text("Edited again", origin, .green, size: 18))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, .text("Edited again", origin, .blue, size: 18))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, .text("Revised", origin, .blue, size: 18))
+        canvas.redo()
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, .text("Edited again", origin, .green, size: 18))
+    }
+
+    @MainActor
+    func testWheelFeedbackAppearsAndFades() async throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: CGPoint(x: 100, y: 400), in: panel))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 500, y: 50), in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: CGPoint(x: 500, y: 50), in: panel))
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolPen) }).performClick(nil)
+        let feedback = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "markupSizeOutline" })
+        let badge = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "markupSizeFeedback" })
+        let point = CGPoint(x: 250, y: 200)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 1, precise: false, at: point))
+        XCTAssertFalse(feedback.isHidden)
+        XCTAssertTrue(badge.isHidden)
+        XCTAssertEqual(feedback.alphaValue, 1, accuracy: 0.01)
+        XCTAssertEqual(feedback.frame.width - 4, 3.5, accuracy: 0.01)
+        let converted = canvas.convert(point, from: nil)
+        XCTAssertEqual(feedback.frame.midX, converted.x, accuracy: 0.01)
+        XCTAssertEqual(feedback.frame.midY, converted.y, accuracy: 0.01)
+        XCTAssertEqual(canvas.pointer, .canvasPoint)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 20, precise: true, at: point))
+        XCTAssertEqual(feedback.frame.width - 4, 8.5, accuracy: 0.01)
+        try await Task.sleep(for: .milliseconds(1500))
+        XCTAssertTrue(feedback.isHidden || feedback.alphaValue < 0.01)
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolText) }).performClick(nil)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 1, precise: false, at: point))
+        XCTAssertFalse(badge.isHidden)
+        try await Task.sleep(for: .milliseconds(1500))
+        XCTAssertTrue(badge.isHidden || badge.alphaValue < 0.01)
+    }
+
+    @MainActor
+    func testNearbyPenStrokesDrawUntilClickedThenMove() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        let pen = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolPen) })
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+        try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
+        pen.performClick(nil)
+        try drag(CGPoint(x: 180, y: 320), CGPoint(x: 240, y: 320))
+        let first = try XCTUnwrap(canvas.marks.first)
+        try drag(CGPoint(x: 220, y: 318), CGPoint(x: 250, y: 280))
+        XCTAssertEqual(canvas.marks.count, 2)
+        XCTAssertEqual(canvas.marks.first, first)
+        let point = CGPoint(x: 195, y: 320)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel))
+        XCTAssertEqual(canvas.marks.count, 2)
+        try drag(point, CGPoint(x: 195, y: 300))
+        XCTAssertNotEqual(canvas.marks.first, first)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, first)
+    }
+
+    @MainActor
+    func testSelectMoveAndDeleteMosaicCanBeUndone() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        func button(_ key: UIKey) throws -> NSButton {
+            try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(key) })
+        }
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+        try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
+        try button(.toolMosaic).performClick(nil)
+        try drag(CGPoint(x: 180, y: 320), CGPoint(x: 260, y: 320))
+        XCTAssertEqual(canvas.marks.count, 1)
+        let original = try XCTUnwrap(canvas.marks.first)
+        let point = CGPoint(x: 220, y: 320)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: point, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: point, in: panel))
+        try drag(point, CGPoint(x: 220, y: 280))
+        XCTAssertNotEqual(canvas.marks.first, original)
+        let moved = try XCTUnwrap(canvas.marks.first)
+        let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\u{7f}",
+            charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: UInt16(kVK_Delete)))
+        panel.sendEvent(key)
+        XCTAssertTrue(canvas.marks.isEmpty)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, moved)
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, original)
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, moved)
     }
 
     @MainActor
@@ -665,7 +1064,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testMovingAnnotationCanBeUndoneAndRedone() throws {
+    func testMovingAnnotationCanBeUndoneAndRedone() async throws {
         _ = NSApplication.shared
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
@@ -683,31 +1082,39 @@ final class CapturePanelTests: XCTestCase {
             canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
             canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
         }
-        func capture() throws -> Data {
+        func capture() async throws -> Data {
             let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                 timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\r",
                 charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: UInt16(kVK_Return)))
             panel.sendEvent(key)
+            try await waitForCaptureExport(canvas)
             return try XCTUnwrap(board.data(forType: .png))
         }
         try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
         try button(.toolRectangle).performClick(nil)
         try drag(CGPoint(x: 180, y: 320), CGPoint(x: 260, y: 240))
-        let original = try capture()
+        let original = try await capture()
+        let edge = CGPoint(x: 180, y: 280)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: edge, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: edge, in: panel))
         try drag(CGPoint(x: 220, y: 280), CGPoint(x: 280, y: 280))
-        let moved = try capture()
+        let moved = try await capture()
         XCTAssertNotEqual(original, moved)
         try drag(CGPoint(x: 320, y: 240), CGPoint(x: 360, y: 210))
-        let resized = try capture()
+        let resized = try await capture()
         XCTAssertNotEqual(moved, resized)
         try button(.toolUndo).performClick(nil)
-        XCTAssertEqual(try capture(), moved)
+        let captured1 = try await capture()
+        XCTAssertEqual(captured1, moved)
         try button(.toolUndo).performClick(nil)
-        XCTAssertEqual(try capture(), original)
+        let captured2 = try await capture()
+        XCTAssertEqual(captured2, original)
         try button(.toolRedo).performClick(nil)
-        XCTAssertEqual(try capture(), moved)
+        let captured3 = try await capture()
+        XCTAssertEqual(captured3, moved)
         try button(.toolRedo).performClick(nil)
-        XCTAssertEqual(try capture(), resized)
+        let captured4 = try await capture()
+        XCTAssertEqual(captured4, resized)
     }
 
     @MainActor
@@ -732,7 +1139,7 @@ final class CapturePanelTests: XCTestCase {
     }
 
     @MainActor
-    func testEnterFinishesTextBeforeCopyingScreenshot() throws {
+    func testEnterFinishesTextBeforeCopyingScreenshot() async throws {
         _ = NSApplication.shared
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
@@ -764,12 +1171,56 @@ final class CapturePanelTests: XCTestCase {
         XCTAssertNil(board.data(forType: .png))
         XCTAssertNil(field.superview)
         panel.sendEvent(key)
+        try await waitForCaptureExport(canvas)
         XCTAssertEqual(outcome, .exported)
         XCTAssertNotNil(board.data(forType: .png))
     }
 
     @MainActor
-    func testArrowEndpointCanBeAdjustedAndUndone() throws {
+    func testArrowMiddleHandleBendsAndSupportsUndoRedoAndEndpoints() throws {
+        _ = NSApplication.shared
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2_000, y: -2_000, width: 640, height: 480),
+                                 image: try testImage(), strings: strings) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        let arrow = try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.toolArrow) })
+        func drag(_ start: CGPoint, _ end: CGPoint) throws {
+            canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: panel))
+            canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
+            canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
+        }
+        try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
+        arrow.performClick(nil)
+        try drag(CGPoint(x: 180, y: 320), CGPoint(x: 300, y: 320))
+        let straight = try XCTUnwrap(canvas.marks.first)
+        let select = CGPoint(x: 200, y: 320)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: select, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: select, in: panel))
+        try drag(CGPoint(x: 240, y: 320), CGPoint(x: 240, y: 260))
+        let bent = try XCTUnwrap(canvas.marks.first)
+        let geometry = try XCTUnwrap(bent.arrowGeometry)
+        XCTAssertTrue(geometry.curved)
+        XCTAssertEqual(geometry.middle, CGPoint(x: 240, y: 220))
+        XCTAssertTrue(bent.hitTest(geometry.middle))
+        XCTAssertFalse(bent.hitTest(CGPoint(x: 240, y: 160), tolerance: 2))
+        canvas.undo()
+        XCTAssertEqual(canvas.marks.first, straight)
+        canvas.redo()
+        XCTAssertEqual(canvas.marks.first, bent)
+        // Undo/redo clears selection; select the curve before adjusting its tip.
+        let onCurve = CGPoint(x: geometry.middle.x, y: 480 - geometry.middle.y)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: onCurve, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: onCurve, in: panel))
+        try drag(CGPoint(x: 300, y: 320), CGPoint(x: 340, y: 300))
+        let adjusted = try XCTUnwrap(canvas.marks.first?.arrowGeometry)
+        XCTAssertEqual(adjusted.end, CGPoint(x: 340, y: 180))
+        XCTAssertEqual(adjusted.middle, geometry.middle)
+    }
+
+    @MainActor
+    func testArrowEndpointCanBeAdjustedAndUndone() async throws {
         _ = NSApplication.shared
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
@@ -787,24 +1238,30 @@ final class CapturePanelTests: XCTestCase {
             canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: panel))
             canvas.mouseUp(with: try mouse(.leftMouseUp, at: end, in: panel))
         }
-        func capture() throws -> Data {
+        func capture() async throws -> Data {
             let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                 timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "\r",
                 charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: UInt16(kVK_Return)))
             panel.sendEvent(key)
+            try await waitForCaptureExport(canvas)
             return try XCTUnwrap(board.data(forType: .png))
         }
         try drag(CGPoint(x: 100, y: 400), CGPoint(x: 500, y: 50))
         try button(.toolArrow).performClick(nil)
         try drag(CGPoint(x: 180, y: 320), CGPoint(x: 260, y: 240))
-        let original = try capture()
+        let original = try await capture()
+        let selected = CGPoint(x: 200, y: 300)
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: selected, in: panel))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: selected, in: panel))
         try drag(CGPoint(x: 260, y: 240), CGPoint(x: 350, y: 300))
-        let resized = try capture()
+        let resized = try await capture()
         XCTAssertNotEqual(original, resized)
         try button(.toolUndo).performClick(nil)
-        XCTAssertEqual(try capture(), original)
+        let captured5 = try await capture()
+        XCTAssertEqual(captured5, original)
         try button(.toolRedo).performClick(nil)
-        XCTAssertEqual(try capture(), resized)
+        let captured6 = try await capture()
+        XCTAssertEqual(captured6, resized)
     }
 
     func testAnnotationHitTestingAndTranslation() {
@@ -823,7 +1280,7 @@ final class CapturePanelTests: XCTestCase {
         let pen = Mark.pen([CGPoint(x: 20, y: 20), CGPoint(x: 70, y: 20)], .red)
         XCTAssertTrue(pen.hitTest(CGPoint(x: 40, y: 22)))
         XCTAssertEqual(pen.translated(by: CGPoint(x: 10, y: 10)).movableBounds?.minX, 30)
-        XCTAssertFalse(Mark.mosaic([CGPoint(x: 50, y: 50)]).hitTest(CGPoint(x: 50, y: 50)))
+        XCTAssertTrue(Mark.mosaic([CGPoint(x: 50, y: 50)]).hitTest(CGPoint(x: 50, y: 50)))
     }
 
     private func space(_ type: NSEvent.EventType) throws -> NSEvent {

@@ -2,7 +2,7 @@ import AppKit
 
 final class CaptureCoach: NSView {
     struct Step {
-        let button: NSButton
+        let button: HoverButton
         let detail: UIKey
     }
 
@@ -17,12 +17,12 @@ final class CaptureCoach: NSView {
     private let next = ForestButton()
     private var stepIndex = 0
     private var stepCount = 0
-    private weak var highlightedButton: NSButton?
+    private weak var highlightedButton: HoverButton?
 
     init(strings: AppStrings) {
         self.strings = strings
         super.init(frame: .zero)
-        KlikTheme.styleOverlay(self, opaque: true)
+        KlikTheme.styleOverlay(self)
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.textColor = KlikTheme.overlayInk
         title.lineBreakMode = .byTruncatingTail
@@ -70,16 +70,15 @@ final class CaptureCoach: NSView {
         next.title = strings(stepIndex == stepCount - 1 ? .practiceHideTips : .next)
         let nextWidth = max(next.fittingSize.width, 62)
         let backWidth = max(back.fittingSize.width, 54)
-        next.frame = CGRect(x: bounds.width - nextWidth - 12, y: 75, width: nextWidth, height: 24)
-        back.frame = CGRect(x: next.frame.minX - backWidth - 5, y: 75, width: backWidth, height: 24)
+        next.frame = CGRect(x: bounds.width - nextWidth - 12, y: 74, width: nextWidth, height: KlikTheme.controlHeight)
+        back.frame = CGRect(x: next.frame.minX - backWidth - 5, y: 74, width: backWidth, height: KlikTheme.controlHeight)
         highlightedButton = step.button
-        step.button.layer?.borderColor = KlikTheme.accent.cgColor
-        step.button.layer?.borderWidth = 1.5
+        step.button.coachHighlighted = true
         isHidden = false
     }
 
     func hide() {
-        highlightedButton?.layer?.borderWidth = 0
+        highlightedButton?.coachHighlighted = false
         highlightedButton = nil
         isHidden = true
     }
@@ -87,7 +86,7 @@ final class CaptureCoach: NSView {
     static func placement(toolbar: CGRect, palette: CGRect?, selection: CGRect, in screen: CGRect) -> CGRect? {
         let visible = screen.insetBy(dx: 6, dy: 6)
         let controls = palette.map(toolbar.union) ?? toolbar
-        let size = CGSize(width: min(320, visible.width), height: 106)
+        let size = CGSize(width: min(320, visible.width), height: 116)
         let x = max(visible.minX, min(toolbar.maxX - size.width, visible.maxX - size.width))
         let above = CGRect(x: x, y: controls.minY - size.height - 8, width: size.width, height: size.height)
         let below = CGRect(x: x, y: controls.maxY + 8, width: size.width, height: size.height)

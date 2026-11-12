@@ -38,12 +38,15 @@
 "captureFailed" = "截图未完成";
 "displayChanged" = "显示器状态已变化，请重新截图。";
 "overlayFocus" = "截图浮层未获得键盘焦点，请重新截图。";
-"toolEllipse" = "圆形";
-"toolRectangle" = "矩形";
-"toolArrow" = "箭头";
-"toolPen" = "画笔";
-"toolText" = "文字";
-"toolMosaic" = "马赛克画刷（滚动调整粗细）";
+"toolEllipse" = "圆形（滚动调整粗细；长图中按住 Option 滚动）";
+"toolRectangle" = "矩形（滚动调整粗细；长图中按住 Option 滚动）";
+"toolArrow" = "箭头（滚动调整粗细；长截图按住 Option 滚动；选中后拖动中点可弯曲）";
+"wheelMosaicSize" = "马赛克粗细";
+"penWidth" = "线条粗细";
+"textSize" = "文字大小";
+"toolPen" = "画笔（滚动调整粗细；长图中按住 Option 滚动）";
+"toolText" = "文字（滚动调整大小；长图中按住 Option 滚动）";
+"toolMosaic" = "马赛克画刷（滚动调整粗细；长截图按住 Option 滚动；点击笔迹后可拖动或删除）";
 "toolUndo" = "撤销（⌘Z）";
 "toolRedo" = "重做（⇧⌘Z）";
 "toolDownload" = "下载 PNG";
@@ -91,6 +94,8 @@
 "menuSettings" = "设置…";
 "menuHistory" = "最近截图";
 "menuHistoryEmpty" = "暂无最近截图";
+"historyDelete" = "删除";
+"historyDeleteConfirmHint" = "再次点击以删除这张截图。";
 "menuHistoryClear" = "清空";
 "menuHistoryConfirmClear" = "确认";
 "menuHistoryConfirmClearHint" = "再次点击以清空截图历史。";
@@ -139,8 +144,8 @@
 "ocrSaveImage" = "保存图片";
 "ocrSaveImageHint" = "保存 PNG（Enter；编辑文字时按 ⌘Enter）";
 
-"ocrCancel" = "取消截图";
-"ocrConfirm" = "复制图片并完成";
+"ocrCancel" = "取消截图（Esc）";
+"ocrConfirm" = "复制图片并完成（点击按钮）";
 
 "saveLocation" = "保存位置";
 "chooseSaveLocation" = "选择文件夹…";
@@ -183,4 +188,4 @@
 "scrollPreviewTitle" = "滚动截图预览";
 "scrollDimensions" = "%lld × %lld 像素";
 "scrollProgressWide" = "已拼接 %lld 像素宽。可以继续滚动，或点「完成」。";
-"scrollMosaicHint" = "马赛克（按住 Option 滚动可调整画笔大小）";
+"scrollMosaicHint" = "马赛克（Option 加滚动调整粗细；点击笔迹后可拖动或删除）";

@@ -2,6 +2,22 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.22 — 2026-11-13
+
+**English**
+
+- Refresh settings, capture controls and previews with flat buttons, consistent corners and alignment, and a more compact settings window.
+- Bend arrows by dragging the middle handle, double-click text to edit it, and scroll to adjust the current tool or selected mark. In a long screenshot preview, hold Option while scrolling to adjust a mark.
+- Select, move, or delete a cover stroke. Delete individual captures from the recent screenshots menu.
+- Move PNG and TIFF encoding, file preparation, and history image loading to the background. Process OCR requests one at a time and reuse identical frames during scrolling capture.
+
+**简体中文**
+
+- 更新设置、截图工具栏和预览，使用无描边按钮、统一圆角和对齐规则，设置窗口随内容收紧。
+- 拖动箭头中点可弯曲箭头，双击文字可编辑。滚动可调整当前工具或选中标注，长图预览中按住 Option 再滚动进行调整。
+- 可选中、移动或删除遮盖笔迹，也可以在最近截图中删除单张图片。
+- 将 PNG 和 TIFF 编码、保存准备和历史图片加载移到后台。OCR 请求依次处理，滚动截图复用完全相同的帧。
+
 ## 0.1.21 — 2026-11-11
 
 **English**

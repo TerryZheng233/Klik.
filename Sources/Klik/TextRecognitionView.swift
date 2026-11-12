@@ -65,7 +65,6 @@ final class TextRecognitionView: NSView {
     private var paletteButtons: [Ink: NSButton] = [:]
     private let markupUndo = HoverButton()
     private let markupRedo = HoverButton()
-    private let toolbarDividers = [NSView(), NSView(), NSView()]
     private let cancelButton = HoverButton()
     private let confirmButton = HoverButton()
     private let strings: AppStrings
@@ -82,7 +81,7 @@ final class TextRecognitionView: NSView {
     var onSave: (() -> Void)?
     var onCancel: (() -> Void)?
     var onConfirm: (() -> Void)?
-    var onTool: ((Tool) -> Void)?
+    var onTool: ((Tool, Bool) -> Void)?
     var onInk: ((Ink) -> Void)?
     var onPickInkColor: (() -> Void)?
     var onUndo: (() -> Void)?
@@ -100,7 +99,7 @@ final class TextRecognitionView: NSView {
         layer?.backgroundColor = KlikTheme.overlayCanvas.withAlphaComponent(0.91).cgColor
         addSubview(imageCard)
         card.identifier = NSUserInterfaceItemIdentifier("ocrPanel")
-        MarkupToolbarLayout.styleTray(card, opaque: true)
+        MarkupToolbarLayout.styleTray(card)
         addSubview(card)
         titleLabel.stringValue = strings(.ocrTitle)
         titleLabel.textColor = KlikTheme.overlayInk
@@ -154,7 +153,7 @@ final class TextRecognitionView: NSView {
         refreshButton.identifier = NSUserInterfaceItemIdentifier("ocrRefresh")
         card.addSubview(refreshButton)
         refreshConfirmation.identifier = NSUserInterfaceItemIdentifier("ocrRefreshConfirmation")
-        MarkupToolbarLayout.styleTray(refreshConfirmation, radius: KlikTheme.badgeRadius, opaque: true)
+        MarkupToolbarLayout.styleTray(refreshConfirmation, radius: KlikTheme.badgeRadius)
         refreshConfirmation.isHidden = true
         refreshConfirmTitle.stringValue = strings(.ocrReplaceTitle)
         refreshConfirmTitle.textColor = KlikTheme.overlayInk
@@ -204,8 +203,9 @@ final class TextRecognitionView: NSView {
     func isEditingText(_ responder: NSResponder?) -> Bool { responder === textView }
     var isEditingMarkupText: Bool { imageCard.isEditingMarkupText }
     func commitMarkupText() { imageCard.commitText() }
-    func beginMarkupText(at point: CGPoint) { imageCard.beginText(at: point, placeholder: strings(.textPlaceholder)) }
-    func setMarkupHandlers(down: @escaping (CGPoint) -> Void, drag: @escaping (CGPoint, NSEvent.ModifierFlags) -> Void,
+    func beginMarkupText(at point: CGPoint, size: CGFloat, existing: String? = nil) { imageCard.beginText(at: point, placeholder: strings(.textPlaceholder), size: size, existing: existing) }
+    func updateMarkupTextSize(_ value: CGFloat) { imageCard.updateTextSize(value) }
+    func setMarkupHandlers(down: @escaping (CGPoint, Int) -> Void, drag: @escaping (CGPoint, NSEvent.ModifierFlags) -> Void,
                            up: @escaping (CGPoint, NSEvent.ModifierFlags) -> Void, text: @escaping (String, CGPoint) -> Void) {
         imageCard.onDown = down; imageCard.onDrag = drag; imageCard.onUp = up; imageCard.onTextCommit = text
     }
@@ -281,11 +281,6 @@ final class TextRecognitionView: NSView {
         markupRedo.toolTip = strings(.toolRedo)
         markupRedo.target = self; markupRedo.action = #selector(redoMarkup)
         markupToolbar.addSubview(markupRedo)
-        for divider in toolbarDividers {
-            divider.wantsLayer = true
-            divider.layer?.backgroundColor = KlikTheme.overlayDivider.cgColor
-            markupToolbar.addSubview(divider)
-        }
         markupToolbar.addSubview(saveButton)
         configureIcon(cancelButton, symbol: "x", fallback: "xmark", label: strings(.ocrCancel))
         cancelButton.contentTintColor = KlikTheme.danger
@@ -338,12 +333,14 @@ final class TextRecognitionView: NSView {
         palette.isHidden = true
         commitMarkupText()
         let chosen = Tool.allCases[sender.tag]
+        var deselect = false
         if chosen == .mosaic {
             mosaicOptions.isHidden = activeTool == .mosaic ? !mosaicOptions.isHidden : false
         } else {
             mosaicOptions.isHidden = true
+            deselect = activeTool == chosen
         }
-        onTool?(chosen)
+        onTool?(chosen, deselect)
     }
     @objc private func undoMarkup() { palette.isHidden = true; commitMarkupText(); onUndo?() }
     @objc private func redoMarkup() { palette.isHidden = true; commitMarkupText(); onRedo?() }
@@ -374,6 +371,8 @@ final class TextRecognitionView: NSView {
         imageCard.frame = placement.image
         card.frame = placement.panel
         let width = card.bounds.width, height = card.bounds.height
+        let inset: CGFloat = 16
+        let buttonSize = KlikTheme.controlHeight
         // NSVisualEffectView uses an unflipped coordinate system.
         titleLabel.frame = CGRect(x: 16, y: height - 34, width: width - 32, height: 20)
         statusLabel.frame = CGRect(x: 16, y: height - 52, width: width - 32, height: 16)
@@ -385,8 +384,10 @@ final class TextRecognitionView: NSView {
             textView.setFrameSize(NSSize(width: scrollView.contentSize.width,
                                          height: max(textView.frame.height, scrollView.contentSize.height)))
         }
-        copyButton.frame = CGRect(x: max(12, width - 46), y: 9, width: 34, height: 34)
-        refreshButton.frame = CGRect(x: max(12, width - 86), y: 9, width: 34, height: 34)
+        copyButton.frame = CGRect(x: max(inset, width - inset - buttonSize), y: 10,
+                                  width: buttonSize, height: buttonSize)
+        refreshButton.frame = CGRect(x: max(inset, copyButton.frame.minX - buttonSize - 6), y: 10,
+                                     width: buttonSize, height: buttonSize)
         let confirmationWidth = max(1, min(196, width - 16))
         let confirmationHeight: CGFloat = 64
         let confirmationX = max(8, min(refreshButton.frame.maxX - confirmationWidth + 8, width - confirmationWidth - 8))
@@ -397,8 +398,8 @@ final class TextRecognitionView: NSView {
         let buttonSpace = max(0, confirmationWidth - 20)
         let cancelWidth = buttonSpace * 0.42
         let replaceWidth = buttonSpace - cancelWidth
-        refreshConfirmCancel.frame = CGRect(x: 7, y: 5, width: cancelWidth, height: 27)
-        refreshConfirmReplace.frame = CGRect(x: refreshConfirmCancel.frame.maxX + 6, y: 5, width: replaceWidth, height: 27)
+        refreshConfirmCancel.frame = CGRect(x: 7, y: 5, width: cancelWidth, height: KlikTheme.controlHeight)
+        refreshConfirmReplace.frame = CGRect(x: refreshConfirmCancel.frame.maxX + 6, y: 5, width: replaceWidth, height: KlikTheme.controlHeight)
         markupToolbar.frame = placement.toolbar
         let paletteWidth: CGFloat = 10 + 27 * CGFloat(Ink.allCases.count + 1)
         let paletteX = max(5, min(placement.toolbar.minX + colorButton.frame.midX - paletteWidth / 2,
@@ -407,7 +408,7 @@ final class TextRecognitionView: NSView {
         let paletteY = below + 35 <= bounds.maxY - 5 ? below : max(5, placement.toolbar.minY - 41)
         palette.frame = CGRect(x: paletteX, y: paletteY, width: paletteWidth, height: 35)
         let buttons = markupButtons + [colorButton, markupUndo, markupRedo, saveButton, cancelButton, confirmButton]
-        MarkupToolbarLayout.arrange(buttons: buttons, dividers: toolbarDividers, width: markupToolbar.bounds.width)
+        MarkupToolbarLayout.arrange(buttons: buttons, width: placement.toolbar.width)
         palette.frame.origin.x = max(5, min(placement.toolbar.minX + colorButton.frame.midX - paletteWidth / 2,
                                             bounds.width - paletteWidth - 5))
         let anchor = markupButtons[Tool.allCases.firstIndex(of: .mosaic)!].frame.midX
@@ -416,6 +417,7 @@ final class TextRecognitionView: NSView {
         let optionsY = below + mosaicOptions.frame.height <= bounds.maxY - 5 ? below
             : max(5, placement.toolbar.minY - mosaicOptions.frame.height - 6)
         mosaicOptions.setFrameOrigin(CGPoint(x: optionsX, y: optionsY))
+
     }
 
     func showCopiedConfirmation() {

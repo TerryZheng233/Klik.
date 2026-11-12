@@ -30,6 +30,21 @@ final class CaptureHistoryTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
     }
 
+    func testRemoveOneHistoryEntryPreservesOthersAndRejectsUnrelatedFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let history = CaptureHistory(directory: directory)
+        try history.record(Data([1]))
+        try history.record(Data([2]))
+        let entries = try history.entries()
+        try history.remove(try XCTUnwrap(entries.first))
+        XCTAssertEqual(try history.entries(), [try XCTUnwrap(entries.last)])
+        let unrelated = directory.appendingPathComponent("other.txt")
+        try Data([3]).write(to: unrelated)
+        XCTAssertThrowsError(try history.remove(unrelated))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
+    }
+
     func testDisabledHistoryDoesNotRecordOrEraseExistingImages() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

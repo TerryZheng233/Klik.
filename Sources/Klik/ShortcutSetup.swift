@@ -325,39 +325,56 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
     private func render() {
         window?.title = "Klik. · " + strings(step == .settings ? .settingsTitle : .setupTitle)
         let root = SetupSurface(color: KlikTheme.window, cornerRadius: 0)
-        let content = stack(.vertical, spacing: 12)
+        let content = stack(.vertical, spacing: 10)
         let footer = stack(.horizontal, spacing: 8)
+        let margin: CGFloat = 28
+        let topInset: CGFloat = 40
+        let bottomInset: CGFloat = 24
+        let footerGap: CGFloat = 20
         root.addSubview(content)
         root.addSubview(footer)
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 30),
-            content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -30),
-            content.topAnchor.constraint(equalTo: root.topAnchor, constant: 39),
-            content.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor, constant: -10),
+            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: margin),
+            content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -margin),
+            content.topAnchor.constraint(equalTo: root.topAnchor, constant: topInset),
+            content.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor, constant: -footerGap),
             footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             footer.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor),
-            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -23)
+            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -bottomInset)
         ])
 
         let header = header()
         content.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        content.setCustomSpacing(22, after: header)
+        content.setCustomSpacing(18, after: header)
 
         if step == .practice {
             addGuide(to: content, footer: footer)
         } else {
             addShortcut(to: content, footer: footer)
         }
-        window?.contentView = root
+        guard let window else { return }
+        window.contentView = root
+        root.layoutSubtreeIfNeeded()
+        let fittedHeight = ceil(topInset + content.fittingSize.height + footerGap + footer.fittingSize.height + bottomInset)
+        let minimumHeight: CGFloat = step == .settings ? 520 : 440
+        let contentSize = CGSize(width: root.bounds.width, height: max(minimumHeight, fittedHeight))
+        let oldFrame = window.frame
+        var newFrame = window.frameRect(forContentRect: CGRect(origin: oldFrame.origin, size: contentSize))
+        newFrame.origin.x = oldFrame.minX
+        newFrame.origin.y = oldFrame.maxY - newFrame.height
+        if let visible = window.screen?.visibleFrame {
+            newFrame.origin.y = max(visible.minY, newFrame.origin.y)
+        }
+        window.setFrame(newFrame, display: window.isVisible)
     }
 
     private func header() -> NSStackView {
-        let row = stack(.horizontal, spacing: 10)
+        let row = stack(.horizontal, spacing: 8)
         let icon = NSImageView(image: NSApp.applicationIconImage)
         icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.widthAnchor.constraint(equalToConstant: 45).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 45).isActive = true
+        icon.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 36).isActive = true
         row.addArrangedSubview(icon)
 
         let words = stack(.vertical, spacing: 3)
@@ -400,8 +417,10 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         let recording = recordingMonitor != nil
         let reviewing = step == .review
         let title = reviewing ? strings(.shortcutPrompt) : strings(.settingsTitle)
-        content.addArrangedSubview(label(title, size: 30, weight: .bold))
-        content.addArrangedSubview(label(strings(reviewing ? .shortcutIntro : .settingsIntro), color: KlikTheme.mutedInk))
+        content.addArrangedSubview(label(title, size: 28, weight: .bold))
+        if reviewing {
+            content.addArrangedSubview(label(strings(.shortcutIntro), color: KlikTheme.mutedInk))
+        }
 
         let settingsRows = stack(.vertical, spacing: 10)
         let settingsControlWidth: CGFloat = 146
@@ -416,7 +435,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             row.addArrangedSubview(spacer)
             let languageControl = languagePicker()
             languageControl.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
-            languageControl.heightAnchor.constraint(equalToConstant: 26).isActive = true
+            languageControl.heightAnchor.constraint(equalToConstant: KlikTheme.controlHeight).isActive = true
             row.addArrangedSubview(languageControl)
             settingsRows.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
@@ -548,7 +567,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         } else {
             settingsRows.addArrangedSubview(keyContent)
             keyContent.widthAnchor.constraint(equalTo: settingsRows.widthAnchor).isActive = true
-            card = SetupSurface(color: KlikTheme.card, cornerRadius: KlikTheme.cornerRadius, outlined: true, content: settingsRows)
+            card = SetupSurface(color: KlikTheme.card, cornerRadius: KlikTheme.cornerRadius, content: settingsRows, inset: 16)
         }
         if !reviewing {
             let versionRow = stack(.horizontal, spacing: 10)
@@ -641,7 +660,7 @@ private final class ForestSwitch: NSButton {
         title = ""
         setButtonType(.pushOnPushOff)
         isBordered = false
-        focusRingType = .none
+        focusRingType = .exterior
         setAccessibilityRole(.checkBox)
         setAccessibilitySubrole(NSAccessibility.Subrole(rawValue: "AXSwitch"))
     }
@@ -652,19 +671,25 @@ private final class ForestSwitch: NSButton {
         didSet { needsDisplay = true }
     }
 
+    override var focusRingMaskBounds: NSRect { trackRect }
+
+    private var trackRect: CGRect {
+        CGRect(x: 0, y: bounds.midY - 10, width: 40, height: 20)
+    }
+
+    override func drawFocusRingMask() {
+        let radius = KlikTheme.controlRadius
+        NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius).fill()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        let track = CGRect(x: 0, y: 2, width: 40, height: 20)
-        let trackPath = NSBezierPath(roundedRect: track, xRadius: 10, yRadius: 10)
+        let radius = KlikTheme.controlRadius
+        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius)
         (state == .on ? KlikTheme.action : KlikTheme.outline).setFill()
         trackPath.fill()
-        let knob = CGRect(x: state == .on ? 21 : 3, y: 4, width: 16, height: 16)
+        let knob = CGRect(x: state == .on ? 21 : 3, y: bounds.midY - 8, width: 16, height: 16)
         (state == .on ? KlikTheme.actionInk : KlikTheme.card).setFill()
         NSBezierPath(ovalIn: knob).fill()
-        if window?.firstResponder === self {
-            (state == .on ? KlikTheme.actionInk : KlikTheme.action).setStroke()
-            trackPath.lineWidth = 2
-            trackPath.stroke()
-        }
     }
 }
 
@@ -678,14 +703,10 @@ private struct HistorySettingError: KlikLocalizedError {
 
 private final class SetupSurface: NSView {
     private let color: NSColor
-    private let cornerRadius: CGFloat
-    private let outlined: Bool
 
-    init(color: NSColor, cornerRadius: CGFloat, outlined: Bool = false, content: NSView? = nil,
+    init(color: NSColor, cornerRadius: CGFloat, content: NSView? = nil,
          inset: CGFloat = 14) {
         self.color = color
-        self.cornerRadius = cornerRadius
-        self.outlined = outlined
         super.init(frame: .zero)
         wantsLayer = true
         KlikTheme.round(layer, radius: cornerRadius, clips: cornerRadius > 0)
@@ -711,8 +732,6 @@ private final class SetupSurface: NSView {
     private func updateColors() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = color.cgColor
-            layer?.borderColor = outlined ? KlikTheme.outline.cgColor : nil
-            layer?.borderWidth = outlined ? 1 : 0
         }
     }
 }

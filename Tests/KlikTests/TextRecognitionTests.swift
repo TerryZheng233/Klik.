@@ -57,6 +57,204 @@ final class TextRecognitionTests: XCTestCase {
     }
 
     @MainActor
+    func testTextSizeBeforeAndAfterInRecognitionView() async throws {
+        _ = NSApplication.shared
+        let context = try XCTUnwrap(CGContext(data: nil, width: 640, height: 480, bitsPerComponent: 8,
+                                             bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try XCTUnwrap(context.makeImage()), strings: strings,
+                                 recognizeText: { _ in "recognized" }) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 100, y: 400)))
+        canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 500, y: 50)))
+        canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 500, y: 50)))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolRecognizeText) }).performClick(nil)
+        try await Task.sleep(for: .milliseconds(50))
+        let overlay = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let all = descendants(overlay)
+        let image = try XCTUnwrap(all.compactMap { $0 as? RecognitionImageView }.first)
+        let tools = try XCTUnwrap(all.first { $0.identifier?.rawValue == "ocrMarkupToolbar" })
+        try XCTUnwrap(tools.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolText) }).performClick(nil)
+        func at(_ point: CGPoint) -> CGPoint { image.convert(image.displayPoint(for: point), to: nil) }
+        let location = at(CGPoint(x: 230, y: 180))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 20, precise: true, at: location, modifiers: []))
+        let preview = try XCTUnwrap(canvas.subviews.compactMap { $0 as? TextSizePreview }.first)
+        XCTAssertEqual(preview.fontSize, 28 * image.imageScale, accuracy: 0.01)
+        image.mouseDown(with: try event(.leftMouseDown, location))
+        let field = try XCTUnwrap(image.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(try XCTUnwrap(field.font).pointSize, preview.fontSize, accuracy: 0.01)
+        field.stringValue = "Hello"
+        image.commitText()
+        guard case .text(_, let origin, _, let original) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(original, 28)
+        let select = at(CGPoint(x: origin.x + 5, y: origin.y + 5))
+        image.mouseDown(with: try event(.leftMouseDown, select))
+        image.mouseUp(with: try event(.leftMouseUp, select))
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 24, precise: true, at: select, modifiers: []))
+        guard case .text(_, _, _, let changed) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(changed, 40)
+        canvas.recognitionUndo()
+        guard case .text(_, _, _, let undone) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Missing text") }
+        XCTAssertEqual(undone, 28)
+        image.mouseDown(with: try event(.leftMouseDown, select))
+        image.mouseUp(with: try event(.leftMouseUp, select))
+        let doubleClick = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: select, modifierFlags: [], timestamp: 0,
+            windowNumber: panel.windowNumber, context: nil, eventNumber: 2, clickCount: 2, pressure: 1))
+        image.mouseDown(with: doubleClick)
+        let reopened = try XCTUnwrap(image.subviews.compactMap { $0 as? NSTextField }.first { $0.isEditable })
+        XCTAssertEqual(reopened.stringValue, "Hello")
+        XCTAssertEqual(try XCTUnwrap(reopened.font).pointSize, 28 * image.imageScale, accuracy: 0.01)
+        reopened.stringValue = "Changed"
+        image.commitText()
+        XCTAssertEqual(canvas.marks.last, .text("Changed", origin, .red, size: 28))
+        canvas.recognitionUndo()
+        XCTAssertEqual(canvas.marks.last, .text("Hello", origin, .red, size: 28))
+        image.mouseDown(with: try event(.leftMouseDown, select))
+        image.mouseUp(with: try event(.leftMouseUp, select))
+        let colorButton = try XCTUnwrap(tools.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkPicker, strings(.inkRed)) })
+        colorButton.performClick(nil)
+        let palette = try XCTUnwrap(all.first { $0.identifier?.rawValue == "ocrColorPalette" })
+        try XCTUnwrap(palette.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(.inkBlue) }).performClick(nil)
+        XCTAssertEqual(canvas.marks.last, .text("Hello", origin, .blue, size: 28))
+        canvas.recognitionUndo()
+        XCTAssertEqual(canvas.marks.last, .text("Hello", origin, .red, size: 28))
+        canvas.recognitionRedo()
+        XCTAssertEqual(canvas.marks.last, .text("Hello", origin, .blue, size: 28))
+        canvas.recognitionUndo()
+        XCTAssertEqual(canvas.marks.last, .text("Hello", origin, .red, size: 28))
+        let editor = try XCTUnwrap(all.compactMap { $0 as? NSTextView }.first)
+        let editorPoint = editor.convert(CGPoint(x: 10, y: 10), to: nil)
+        XCTAssertFalse(canvas.adjustMarkupSize(delta: 20, precise: true, at: editorPoint, modifiers: []))
+    }
+
+    @MainActor
+    func testBendArrowInRecognitionView() async throws {
+        _ = NSApplication.shared
+        let context = try XCTUnwrap(CGContext(data: nil, width: 640, height: 480, bitsPerComponent: 8,
+                                             bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let strings = AppStrings(language: .english)
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try XCTUnwrap(context.makeImage()), strings: strings,
+                                 recognizeText: { _ in "recognized" }) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 100, y: 400)))
+        canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 500, y: 50)))
+        canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 500, y: 50)))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        func button(_ key: UIKey) throws -> NSButton {
+            try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == strings(key) })
+        }
+        try button(.toolArrow).performClick(nil)
+        canvas.mouseDown(with: try event(.leftMouseDown, CGPoint(x: 180, y: 320)))
+        canvas.mouseDragged(with: try event(.leftMouseDragged, CGPoint(x: 300, y: 320)))
+        canvas.mouseUp(with: try event(.leftMouseUp, CGPoint(x: 300, y: 320)))
+        try button(.toolRecognizeText).performClick(nil)
+        try await Task.sleep(for: .milliseconds(50))
+        let overlay = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let image = try XCTUnwrap(descendants(overlay).compactMap { $0 as? RecognitionImageView }.first)
+        func at(_ point: CGPoint) -> CGPoint { image.convert(image.displayPoint(for: point), to: nil) }
+        let select = at(CGPoint(x: 200, y: 160))
+        image.mouseDown(with: try event(.leftMouseDown, select))
+        image.mouseUp(with: try event(.leftMouseUp, select))
+        let middle = at(CGPoint(x: 240, y: 160)), bent = at(CGPoint(x: 240, y: 220))
+        image.mouseDown(with: try event(.leftMouseDown, middle))
+        image.mouseDragged(with: try event(.leftMouseDragged, bent))
+        image.mouseUp(with: try event(.leftMouseUp, bent))
+        let geometry = try XCTUnwrap(canvas.marks.first?.arrowGeometry)
+        XCTAssertTrue(geometry.curved)
+        XCTAssertEqual(geometry.middle.x, 240, accuracy: 0.1)
+        XCTAssertEqual(geometry.middle.y, 220, accuracy: 0.1)
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 34, precise: true, at: bent, modifiers: []))
+        XCTAssertEqual(canvas.marks.first?.lineWidth, 11)
+        canvas.recognitionUndo()
+        XCTAssertEqual(canvas.marks.first?.lineWidth, 2.5)
+        canvas.recognitionUndo()
+        XCTAssertFalse(try XCTUnwrap(canvas.marks.first?.arrowGeometry).curved)
+    }
+
+    @MainActor
+    func testMovingMosaicRefreshesRecognition() async throws {
+        _ = NSApplication.shared
+        let context = try XCTUnwrap(CGContext(data: nil, width: 640, height: 480, bitsPerComponent: 8,
+                                             bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let strings = AppStrings(language: .english)
+        var calls = 0
+        let panel = CapturePanel(frame: CGRect(x: -2000, y: -2000, width: 640, height: 480),
+                                 image: try XCTUnwrap(context.makeImage()), strings: strings,
+                                 recognizeText: { _ in calls += 1; return "result \(calls)" }) { _ in }
+        defer { panel.orderOut(nil) }
+        let canvas = try XCTUnwrap(panel.contentView as? CaptureView)
+        func mouse(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        }
+        canvas.mouseDown(with: try mouse(.leftMouseDown, CGPoint(x: 100, y: 400)))
+        canvas.mouseDragged(with: try mouse(.leftMouseDragged, CGPoint(x: 500, y: 50)))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, CGPoint(x: 500, y: 50)))
+        let toolbar = try XCTUnwrap(canvas.subviews.first { $0 is NSVisualEffectView })
+        try XCTUnwrap(toolbar.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolRecognizeText) }).performClick(nil)
+        try await Task.sleep(for: .milliseconds(50))
+        let overlay = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
+        func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+        let all = descendants(overlay)
+        let image = try XCTUnwrap(all.compactMap { $0 as? RecognitionImageView }.first)
+        let tools = try XCTUnwrap(all.first { $0.identifier?.rawValue == "ocrMarkupToolbar" })
+        let editor = try XCTUnwrap(all.compactMap { $0 as? NSTextView }.first { $0.identifier?.rawValue == "ocrText" })
+        try XCTUnwrap(tools.subviews.compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolMosaic) }).performClick(nil)
+        func at(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            image.convert(image.displayPoint(for: CGPoint(x: x, y: y)), to: nil)
+        }
+        let start = at(320, 180), end = at(400, 240)
+        image.mouseDown(with: try mouse(.leftMouseDown, start))
+        image.mouseDragged(with: try mouse(.leftMouseDragged, end))
+        image.mouseUp(with: try mouse(.leftMouseUp, end))
+        try await Task.sleep(for: .milliseconds(50))
+        let original = try XCTUnwrap(canvas.marks.first)
+        image.mouseDown(with: try mouse(.leftMouseDown, start))
+        image.mouseUp(with: try mouse(.leftMouseUp, start))
+        try await Task.sleep(for: .milliseconds(50))
+        let copy = try XCTUnwrap(all.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "ocrCopy" })
+        let beforeResize = calls
+        XCTAssertTrue(canvas.adjustMarkupSize(delta: 10, precise: true, at: start, modifiers: []))
+        XCTAssertFalse(copy.isEnabled)
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(calls, beforeResize + 1)
+        XCTAssertEqual(editor.string, "result \(calls)")
+        XCTAssertTrue(copy.isEnabled)
+        let beforeMove = calls
+        image.mouseDown(with: try mouse(.leftMouseDown, start))
+        image.mouseDragged(with: try mouse(.leftMouseDragged, at(340, 200)))
+        XCTAssertFalse(copy.isEnabled)
+        XCTAssertNotEqual(editor.string, "result \(beforeMove)")
+        image.mouseUp(with: try mouse(.leftMouseUp, at(340, 200)))
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertNotEqual(canvas.marks.first, original)
+        XCTAssertEqual(calls, beforeMove + 1)
+        XCTAssertEqual(editor.string, "result \(calls)")
+    }
+
+    @MainActor
     func testMosaicClearsOldTextAndRerunsRecognitionAfterDrawingAndUndo() async throws {
         _ = NSApplication.shared
         let context = try XCTUnwrap(CGContext(data: nil, width: 640, height: 480, bitsPerComponent: 8,
@@ -167,7 +365,7 @@ final class TextRecognitionTests: XCTestCase {
         canvas.mouseDragged(with: try mouse(.leftMouseDragged, CGPoint(x: 260, y: 240)))
         canvas.mouseUp(with: try mouse(.leftMouseUp, CGPoint(x: 260, y: 240)))
         canvas.updatePointer(at: CGPoint(x: 220, y: 280))
-        XCTAssertEqual(canvas.pointer, .move)
+        XCTAssertEqual(canvas.pointer, .canvasPoint)
         try button(.toolRecognizeText, in: toolbar).performClick(nil)
         try await Task.sleep(for: .milliseconds(50))
         let overlay = try XCTUnwrap(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
@@ -177,14 +375,14 @@ final class TextRecognitionTests: XCTestCase {
         let image = try XCTUnwrap(all.compactMap { $0 as? RecognitionImageView }.first)
         let markPoint = image.convert(image.displayPoint(for: CGPoint(x: 220, y: 200)), to: nil)
         canvas.updatePointer(at: markPoint)
-        XCTAssertEqual(canvas.pointer, .move)
+        XCTAssertEqual(canvas.pointer, .canvasPoint)
         let tools = try XCTUnwrap(all.first { $0.identifier?.rawValue == "ocrMarkupToolbar" })
         try button(.toolText, in: tools).performClick(nil)
         canvas.updatePointer(at: markPoint)
-        XCTAssertEqual(canvas.pointer, .move)
+        XCTAssertEqual(canvas.pointer, .canvasPoint)
         let blankPoint = image.convert(image.displayPoint(for: CGPoint(x: 380, y: 250)), to: nil)
         canvas.updatePointer(at: blankPoint)
-        XCTAssertEqual(canvas.pointer, .crosshair)
+        XCTAssertEqual(canvas.pointer, .canvasPoint)
         let color = try XCTUnwrap(tools.subviews.compactMap { $0 as? NSButton }
             .first { $0.toolTip == strings(.inkPicker, strings(.inkRed)) })
         color.performClick(nil)
@@ -273,12 +471,13 @@ final class TextRecognitionTests: XCTestCase {
             } else {
                 panel.sendEvent(try enter())
             }
+            try await waitForCaptureExport(canvas)
             let png = try XCTUnwrap(saved, mode)
             let source = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
             let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
             XCTAssertEqual(image.width, 300)
             XCTAssertEqual(image.height, 300)
-            XCTAssertEqual(outcome, .exported, "Saving must finish immediately")
+            XCTAssertEqual(outcome, .exported, "Saving must finish successfully")
             XCTAssertEqual(board.string(forType: .string), "original clipboard")
         }
     }
@@ -499,6 +698,7 @@ final class TextRecognitionTests: XCTestCase {
                 XCTAssertEqual(outcome, .cancelled)
                 XCTAssertEqual(board.string(forType: .string), "unchanged")
             } else {
+                try await waitForCaptureExport(canvas)
                 XCTAssertEqual(outcome, .exported)
                 XCTAssertNotNil(board.data(forType: .png))
             }
@@ -537,10 +737,12 @@ final class TextRecognitionTests: XCTestCase {
         func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
         let all = descendants(overlay)
         try XCTUnwrap(all.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "ocrSaveImage" }).performClick(nil)
+        try await waitForCaptureExport(canvas)
         XCTAssertNil(outcome)
         XCTAssertNotNil(canvas.subviews.first { $0.identifier?.rawValue == "ocrOverlay" })
         XCTAssertTrue(all.compactMap { $0 as? NSTextField }.contains { $0.stringValue == strings(.downloadError) && !$0.isHidden })
         try XCTUnwrap(all.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "ocrConfirm" }).performClick(nil)
+        try await waitForCaptureExport(canvas)
         XCTAssertEqual(outcome, .exported)
         XCTAssertNotNil(board.data(forType: .png))
     }
@@ -749,7 +951,7 @@ final class TextRecognitionTests: XCTestCase {
             target.mouseDown(with: try event(.leftMouseDown, start))
             target.mouseDragged(with: try event(.leftMouseDragged, end))
             target.mouseUp(with: try event(.leftMouseUp, end))
-            guard case .pen(_, .custom(let picked)) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Expected a custom-colored pen stroke") }
+            guard case .pen(_, .custom(let picked), _) = try XCTUnwrap(canvas.marks.last) else { return XCTFail("Expected a custom-colored pen stroke") }
             XCTAssertEqual(picked.red, 0.2, accuracy: 0.02)
             XCTAssertEqual(picked.green, 0.5, accuracy: 0.02)
             XCTAssertEqual(picked.blue, 0.8, accuracy: 0.02)

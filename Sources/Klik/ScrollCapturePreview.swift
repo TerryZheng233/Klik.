@@ -39,15 +39,15 @@ final class ScrollCapturePreview: NSPanel {
         let root = KlikTheme.installPanelSurface(in: self, radius: KlikTheme.windowRadius,
                                                  identifier: "scrollPreviewSurface")
 
-        let inset: CGFloat = 12
-        let footerHeight: CGFloat = 50
+        let inset: CGFloat = 16
+        let footerHeight: CGFloat = 54
         let imageFrame = CGRect(x: inset, y: inset + footerHeight,
                                 width: size.width - 2 * inset, height: size.height - footerHeight - 2 * inset)
         let imageWell = NSView(frame: imageFrame)
         KlikTheme.styleCaptureImage(imageWell)
         root.addSubview(imageWell)
 
-        let scroll = NSScrollView(frame: imageWell.bounds.insetBy(dx: 1, dy: 1))
+        let scroll = NSScrollView(frame: imageWell.bounds)
         scroll.identifier = NSUserInterfaceItemIdentifier("scrollPreviewImage")
         scroll.borderType = .noBorder
         scroll.hasVerticalScroller = axis == .vertical
@@ -83,12 +83,12 @@ final class ScrollCapturePreview: NSPanel {
         dimensions.stringValue = strings(.scrollDimensions, image.width, image.height)
         dimensions.textColor = KlikTheme.overlayMuted
         dimensions.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        dimensions.frame = CGRect(x: inset + 3, y: toolbar.midY - 8, width: labelWidth, height: 16)
+        dimensions.frame = CGRect(x: inset, y: toolbar.midY - 8, width: labelWidth, height: 16)
         root.addSubview(dimensions)
         status.font = .systemFont(ofSize: 11)
         status.textColor = KlikTheme.overlayMuted
         status.maximumNumberOfLines = 2
-        status.frame = CGRect(x: inset + 3, y: 7, width: labelWidth, height: 27)
+        status.frame = CGRect(x: inset, y: 11, width: labelWidth, height: 27)
         status.isHidden = true
         root.addSubview(status)
         if let message { showStatus(strings(message)) }
@@ -117,7 +117,7 @@ final class ScrollCapturePreview: NSPanel {
 
     override func sendEvent(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        if event.type == .scrollWheel, modifiers == .option, canvas.adjustMosaicSize(with: event) { return }
+        if event.type == .scrollWheel, canvas.adjustMarkupSize(with: event) { return }
         if event.type == .keyDown, (firstResponder as? NSTextView)?.hasMarkedText() != true {
             switch Int(event.keyCode) {
             case kVK_Return, kVK_ANSI_KeypadEnter:
@@ -129,6 +129,8 @@ final class ScrollCapturePreview: NSPanel {
             case kVK_Escape where modifiers.isEmpty:
                 onCancel?()
                 return
+            case kVK_Delete, kVK_ForwardDelete:
+                if modifiers.isEmpty && !canvas.isEditingText && canvas.deleteSelectedMark() { return }
             case kVK_ANSI_Z where !canvas.isEditingText:
                 if modifiers == .command { canvas.undo(); return }
                 if modifiers == [.command, .shift] { canvas.redo(); return }

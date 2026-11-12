@@ -3,7 +3,15 @@ import CoreMedia
 import ScreenCaptureKit
 
 @MainActor
-final class ScrollFrameSource {
+protocol ScrollCaptureFrameSource: AnyObject {
+    var frames: AsyncThrowingStream<CGImage, Error> { get }
+    func start() async throws
+    func finishFrames()
+    func stop() async
+}
+
+@MainActor
+final class ScrollFrameSource: ScrollCaptureFrameSource {
     let frames: AsyncThrowingStream<CGImage, Error>
     private let receiver: Receiver
     private let stream: SCStream
@@ -66,7 +74,7 @@ final class ScrollFrameSource {
         let continuation: AsyncThrowingStream<CGImage, Error>.Continuation
         private let width: Int
         private let height: Int
-        private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        private let frameCopy = ScrollFrameCopyCache()
 
         init(continuation: AsyncThrowingStream<CGImage, Error>.Continuation, width: Int, height: Int) {
             self.continuation = continuation
@@ -87,27 +95,50 @@ final class ScrollFrameSource {
                   let buffer = sampleBuffer.imageBuffer else { return }
 
             guard CVPixelBufferGetWidth(buffer) == width, CVPixelBufferGetHeight(buffer) == height,
-                  let image = copyImage(from: buffer) else {
+                  let image = frameCopy.image(from: buffer) else {
                 continuation.finish(throwing: Failure.frame)
                 return
             }
             continuation.yield(image)
         }
 
-        private func copyImage(from buffer: CVPixelBuffer) -> CGImage? {
-            guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else { return nil }
-            defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
-            let stride = CVPixelBufferGetBytesPerRow(buffer)
-            // Copy before releasing the sample. The capture stream reuses its IOSurfaces.
-            guard let address = CVPixelBufferGetBaseAddress(buffer),
-                  let data = CFDataCreate(nil, address.assumingMemoryBound(to: UInt8.self), stride * height),
-                  let provider = CGDataProvider(data: data) else { return nil }
-            let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
-                CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue)
-            )
-            return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
-                           bytesPerRow: stride, space: colorSpace, bitmapInfo: bitmapInfo,
-                           provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+}
+
+/// Reuse an immutable copy for identical complete frames. The stream's own
+/// IOSurfaces are never retained because ScreenCaptureKit may reuse them.
+final class ScrollFrameCopyCache {
+    private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    private var lastData: CFData?
+    private var lastImage: CGImage?
+    private var lastStride = 0
+
+    func image(from buffer: CVPixelBuffer) -> CGImage? {
+        guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else { return nil }
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        let width = CVPixelBufferGetWidth(buffer)
+        let height = CVPixelBufferGetHeight(buffer)
+        let stride = CVPixelBufferGetBytesPerRow(buffer)
+        let count = stride * height
+        guard let address = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+        if let lastData, let lastImage, lastStride == stride,
+           lastImage.width == width, lastImage.height == height,
+           CFDataGetLength(lastData) == count, let bytes = CFDataGetBytePtr(lastData),
+           memcmp(address, bytes, count) == 0 {
+            return lastImage
         }
+        guard let data = CFDataCreate(nil, address.assumingMemoryBound(to: UInt8.self), count),
+              let provider = CGDataProvider(data: data) else { return nil }
+        let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
+            CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue)
+        )
+        guard let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                                  bytesPerRow: stride, space: colorSpace, bitmapInfo: bitmapInfo,
+                                  provider: provider, decode: nil, shouldInterpolate: false,
+                                  intent: .defaultIntent) else { return nil }
+        lastData = data
+        lastImage = image
+        lastStride = stride
+        return image
     }
 }
