@@ -52,6 +52,10 @@ https://github.com/user-attachments/assets/5356d252-2ed5-4efb-a5d1-f7761f045e13
 
 想调整标注的位置，拖动框、箭头、文字或笔迹就可以。拖动矩形边角可以改变大小，拖动箭头端点可以调整方向和长度。添加文字时，按一次 **Enter** 确认文字，再按一次复制截图。
 
+![Klik. 在网页截图上添加矩形和文字标注，底部显示标注工具栏。](docs/klik-markup-demo.png)
+
+![Klik. 使用像素马赛克和柔和笔刷遮盖截图中的文字。](docs/klik-mosaic-demo.png)
+
 有些应用的窗口可能无法出现在截图中。在部分 Mac 上，微信即使显示在屏幕上，也可能遇到这种情况。
 
 ## 滚动截长图
@@ -59,6 +63,8 @@ https://github.com/user-attachments/assets/5356d252-2ed5-4efb-a5d1-f7761f045e13
 1. 框选页面或应用中会滚动的部分，点击工具栏里的「**滚动截图**」。
 2. 在选区内平稳滚动。第一次检测到的滚动会锁定纵向或横向，之后可以沿同一轴上下或左右来回滚动。
 3. 点击「**完成**」预览拼好的长图。可以边滚动查看边标注。按 **Enter** 或点 **✓** 复制，点 **↓** 保存原尺寸 PNG。
+
+![Klik. 预览滚动拼接后的维基百科页面，底部显示标注工具栏。](docs/klik-scrolling-demo.png)
 
 ## 识别文字
 
@@ -117,6 +123,8 @@ GitHub 上的版本使用临时签名，**尚未通过 Apple 公证**。首次�
 
 点击菜单栏上的 **k.**，就能找到最近截过的图。截图保存在这台 Mac 上，点选一张可以预览和重新复制。想清空时，先点「**清空**」，再点原位置的红色「**确认**」。默认保留 10 张，你可以在设置里关闭新增历史，或改为 5、10、20 或 50 张；关闭后已有历史会保留，直到手动清空。达到上限后，最早的截图会被移除。
 
+![Klik. 菜单栏中的最近截图列表，显示截图缩略图。](docs/klik-history-demo.png)
+
 在设置里，你也可以让 Klik. 随登录启动，或者检查更新。发现新版本时，可以直接在设置中安装并重启 Klik。从 0.1.19 起，Klik. 会在安装前验证独立的更新签名。GitHub 发布版使用临时应用签名，更新后 macOS 可能再次要求屏幕录制授权。
 
 设置里还可以修改快捷键，或在「语言」里选择「跟随系统」「English」或「简体中文」。引导、设置和截图工具统一使用橄榄绿与奶油白配色。引导、设置和滚动截图提示窗会跟随 Mac 的浅色或深色外观。
@@ -150,7 +158,7 @@ dmgbuild -s Packaging/dmg-settings.py \
 
 ## 截图来源
 
-框选与文字识别示例使用了[维基百科「Coffee」条目](https://en.wikipedia.org/wiki/Coffee)的摘录，采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 许可。咖啡照片由 [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg) 拍摄，采用 [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) 许可。截图经过裁切和标注。
+框选与文字识别示例使用了[维基百科「Coffee」条目](https://en.wikipedia.org/wiki/Coffee)的摘录，采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 许可。咖啡照片由 [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg) 拍摄，采用 [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) 许可。截图经过裁切和标注。实机演示也展示了 [Wikipedia 条目](https://en.wikipedia.org/wiki/Wikipedia)和 [Apple 网站](https://www.apple.com/)。
 
 ## 许可证
 

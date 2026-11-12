@@ -52,6 +52,10 @@ Want to capture a partly covered window? Hold **Space**, point to any visible pa
 
 Drag a box, arrow, text, or pen mark if you want to move it. You can resize a box using its handles or adjust an arrow by dragging an endpoint. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
 
+![Klik. adding a rectangle and text to a webpage screenshot, with the annotation toolbar visible.](docs/klik-markup-demo.png)
+
+![Klik. covering text with pixelation and a soft brush.](docs/klik-mosaic-demo.png)
+
 Some apps may prevent their windows from appearing in screenshots. On some Macs, this can include WeChat, even when its window is visible on screen.
 
 ## Scrolling screenshots
@@ -59,6 +63,8 @@ Some apps may prevent their windows from appearing in screenshots. On some Macs,
 1. Frame the part of the page or app that scrolls, then click **Scrolling Screenshot** in the toolbar.
 2. Scroll inside the selection at a steady pace. The first detected movement sets the axis. You can scroll up and down or left and right, including reversing direction on that axis.
 3. Click **Done** to review the stitched image. Scroll through it and add any markup you need. Press **Enter** or click **✓** to copy it, or use **↓** to save a PNG at its full stitched resolution.
+
+![Klik. previewing a stitched Wikipedia page with the annotation toolbar visible.](docs/klik-scrolling-demo.png)
 
 ## Recognize text
 
@@ -117,6 +123,8 @@ These steps create an exception for the app. If you don’t see the option, or y
 
 Find your recent screenshots under **k.** in the menu bar. They’re stored on your Mac, and you can select one to preview or copy it again. To clear the list, click **Clear All**, then click the red **Confirm** button in the same spot. Klik. keeps 10 by default. In settings, you can turn off new history or change the limit to 5, 10, 20, or 50 screenshots. Turning it off keeps existing history until you clear it. When the limit is reached, the oldest captures are removed.
 
+![Klik. showing the recent screenshots menu with image thumbnails.](docs/klik-history-demo.png)
+
 In settings, you can also have Klik. open at login and check for updates. When a new version is available, you can install it there and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing. GitHub releases use ad hoc app signing, so macOS may request screen recording permission again after an update.
 
 You can also change your shortcut in settings, or choose **Follow System**, **English**, or **简体中文** under **Language**. The olive-and-cream palette runs through the app, including the guide, settings, and capture tools. The guide, settings, and scrolling capture prompt follow your Mac’s light or dark appearance.
@@ -150,7 +158,7 @@ dmgbuild -s Packaging/dmg-settings.py \
 
 ## Screenshot credits
 
-The capture and text recognition examples show the [Wikipedia article “Coffee”](https://en.wikipedia.org/wiki/Coffee), excerpted under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The coffee photograph is by [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg), under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Screenshots were cropped and annotated.
+The capture and text recognition examples show the [Wikipedia article “Coffee”](https://en.wikipedia.org/wiki/Coffee), excerpted under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The coffee photograph is by [Bex Walton](https://commons.wikimedia.org/wiki/File:Latte_and_dark_coffee.jpg), under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Screenshots were cropped and annotated. The live demonstrations also show the [Wikipedia article “Wikipedia”](https://en.wikipedia.org/wiki/Wikipedia) and the [Apple website](https://www.apple.com/).
 
 ## License
 
