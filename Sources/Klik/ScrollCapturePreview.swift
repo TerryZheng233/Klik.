@@ -5,7 +5,9 @@ final class ScrollCapturePreview: NSPanel {
     var onCancel: (() -> Void)?
     var onExport: ((CaptureView.Destination, CGImage) -> Void)?
     private var canvas: CaptureView!
+    private let scroll = NSScrollView()
     private let dimensions = NSTextField(labelWithString: "")
+    private let sizeHint = NSTextField(labelWithString: "")
     private let status = NSTextField(wrappingLabelWithString: "")
 
     var isExporting = false {
@@ -47,15 +49,18 @@ final class ScrollCapturePreview: NSPanel {
         KlikTheme.styleCaptureImage(imageWell)
         root.addSubview(imageWell)
 
-        let scroll = NSScrollView(frame: imageWell.bounds)
+        scroll.frame = imageWell.bounds
         scroll.identifier = NSUserInterfaceItemIdentifier("scrollPreviewImage")
         scroll.borderType = .noBorder
-        scroll.hasVerticalScroller = axis == .vertical
-        scroll.hasHorizontalScroller = axis == .horizontal
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
         scroll.scrollerKnobStyle = .light
         scroll.backgroundColor = KlikTheme.overlayCanvas
+        scroll.minMagnification = 0.5
+        scroll.maxMagnification = 4
+        scroll.allowsMagnification = true
         let padding: CGFloat = 10
         let imageWidth = CGFloat(image.width)
         let imageHeight = CGFloat(image.height)
@@ -74,6 +79,9 @@ final class ScrollCapturePreview: NSPanel {
         }
         canvas.onDocumentExport = { [weak self] destination, rendered in self?.onExport?(destination, rendered) }
         canvas.onDocumentStatus = { [weak self] in self?.showStatus($0) }
+        canvas.onDocumentSizeChange = { [weak self] size in
+            self?.dimensions.stringValue = strings(.scrollDimensions, Int(size.width), Int(size.height))
+        }
         scroll.documentView = canvas
         imageWell.addSubview(scroll)
         initialFirstResponder = canvas
@@ -83,8 +91,16 @@ final class ScrollCapturePreview: NSPanel {
         dimensions.stringValue = strings(.scrollDimensions, image.width, image.height)
         dimensions.textColor = KlikTheme.overlayMuted
         dimensions.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        dimensions.frame = CGRect(x: inset, y: toolbar.midY - 8, width: labelWidth, height: 16)
+        dimensions.frame = CGRect(x: inset, y: toolbar.midY + 1, width: labelWidth, height: 16)
         root.addSubview(dimensions)
+        sizeHint.identifier = NSUserInterfaceItemIdentifier("scrollPreviewSizeHint")
+        sizeHint.stringValue = strings(.scrollSizeHint)
+        sizeHint.textColor = KlikTheme.overlayMuted
+        sizeHint.font = .systemFont(ofSize: 11)
+        sizeHint.lineBreakMode = .byTruncatingTail
+        sizeHint.toolTip = strings(.scrollSizeHint)
+        sizeHint.frame = CGRect(x: inset, y: toolbar.midY - 15, width: labelWidth, height: 16)
+        root.addSubview(sizeHint)
         status.font = .systemFont(ofSize: 11)
         status.textColor = KlikTheme.overlayMuted
         status.maximumNumberOfLines = 2
@@ -109,6 +125,7 @@ final class ScrollCapturePreview: NSPanel {
     }
 
     func showStatus(_ message: String) {
+        sizeHint.isHidden = true
         status.stringValue = message
         status.toolTip = message
         status.isHidden = false
@@ -117,17 +134,38 @@ final class ScrollCapturePreview: NSPanel {
 
     override func sendEvent(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        if event.type == .scrollWheel, canvas.adjustMarkupSize(with: event) { return }
+        if event.type == .scrollWheel {
+            if modifiers == .command {
+                let point = event.window == nil ? convertPoint(fromScreen: event.locationInWindow) : event.locationInWindow
+                let clip = scroll.contentView
+                let anchor = clip.convert(point, from: nil)
+                if clip.bounds.contains(anchor) {
+                    zoom(with: event, anchoredAt: anchor, windowPoint: point)
+                    return
+                }
+            }
+            if canvas.adjustMarkupSize(with: event) { return }
+        }
         if event.type == .keyDown, (firstResponder as? NSTextView)?.hasMarkedText() != true {
             switch Int(event.keyCode) {
             case kVK_Return, kVK_ANSI_KeypadEnter:
-                if modifiers.isEmpty {
-                    if canvas.isEditingText { canvas.finishTextEditing() }
-                    else { canvas.export(.clipboard) }
+                if canvas.isCropping, modifiers.isEmpty {
+                    canvas.applyCrop()
+                    return
+                } else if canvas.isEditingText, modifiers.isEmpty {
+                    canvas.finishTextEditing()
+                    return
+                } else if canvas.isEditingText, modifiers == .shift {
+                    (firstResponder as? InlineMarkupTextView)?.insertNewline(nil)
+                    return
+                } else if !canvas.isEditingText, modifiers.isEmpty {
+                    if !event.isARepeat { canvas.export(.clipboard) }
                     return
                 }
             case kVK_Escape where modifiers.isEmpty:
-                onCancel?()
+                if canvas.isCropping { canvas.cancelCrop() }
+                else if canvas.isEditingText { canvas.cancelActiveTextEditing() }
+                else { onCancel?() }
                 return
             case kVK_Delete, kVK_ForwardDelete:
                 if modifiers.isEmpty && !canvas.isEditingText && canvas.deleteSelectedMark() { return }
@@ -139,10 +177,21 @@ final class ScrollCapturePreview: NSPanel {
         }
         super.sendEvent(event)
         if isVisible, [.mouseMoved, .mouseEntered, .mouseExited, .cursorUpdate,
-                       .leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel].contains(event.type) {
-            if event.type == .scrollWheel { canvas.updateDocumentViewport() }
+                       .leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel, .magnify].contains(event.type) {
+            if event.type == .scrollWheel || event.type == .magnify { canvas.updateDocumentViewport() }
             canvas.updatePointer(at: mouseLocationOutsideOfEventStream)
         }
+    }
+
+    private func zoom(with event: NSEvent, anchoredAt anchor: CGPoint, windowPoint: CGPoint) {
+        guard event.momentumPhase.isEmpty else { return }
+        let delta = event.scrollingDeltaY == 0 ? event.scrollingDeltaX : event.scrollingDeltaY
+        guard delta != 0 else { return }
+        let steps = event.hasPreciseScrollingDeltas ? delta / 12 : delta
+        let factor = pow(1.12, max(-20, min(20, steps)))
+        scroll.setMagnification(scroll.magnification * factor, centeredAt: anchor)
+        canvas.updateDocumentViewport()
+        canvas.updatePointer(at: windowPoint)
     }
 
     override func orderOut(_ sender: Any?) {

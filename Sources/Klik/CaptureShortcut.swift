@@ -129,11 +129,11 @@ struct KlikPreferences {
 
 final class GlobalHotKey {
     private static let signature: OSType = 0x54534E50
+    private static var nextID: UInt32 = 0
 
     private var handler: EventHandlerRef?
     private var key: EventHotKeyRef?
     private var registrationID: UInt32 = 0
-    private var serial: UInt32 = 0
     private var shortcut: CaptureShortcut?
     private let action: @MainActor () -> Void
 
@@ -167,8 +167,9 @@ final class GlobalHotKey {
     func register(_ shortcut: CaptureShortcut) throws {
         guard self.shortcut?.matches(shortcut) != true else { return }
 
-        serial &+= 1
-        let id = EventHotKeyID(signature: Self.signature, id: serial)
+        Self.nextID &+= 1
+        if Self.nextID == 0 { Self.nextID = 1 }
+        let id = EventHotKeyID(signature: Self.signature, id: Self.nextID)
         var replacement: EventHotKeyRef?
         let status = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers, id,
                                          GetApplicationEventTarget(), UInt32(kEventHotKeyExclusive),

@@ -13,8 +13,8 @@ final class CaptureCoach: NSView {
     private let title = NSTextField(labelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private let count = NSTextField(labelWithString: "")
-    private let back = ForestButton()
-    private let next = ForestButton()
+    private let back = HoverButton()
+    private let next = HoverButton()
     private var stepIndex = 0
     private var stepCount = 0
     private weak var highlightedButton: HoverButton?
@@ -32,9 +32,9 @@ final class CaptureCoach: NSView {
         count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
         count.textColor = KlikTheme.accent
         count.alignment = .right
-        configure(back, title: strings(.back), action: #selector(previousStep))
-        next.isPrimary = true
-        configure(next, title: strings(.next), action: #selector(nextStep))
+        MarkupToolbarLayout.configureButton(back, symbol: "chevron-left", fallback: "chevron.left",
+            label: strings(.back), target: self, action: #selector(previousStep))
+        configureNext(isLast: false)
         for child in [title, detail, count, back, next] as [NSView] { addSubview(child) }
     }
 
@@ -67,11 +67,10 @@ final class CaptureCoach: NSView {
         setCopy(step.button.accessibilityLabel() ?? "", strings(step.detail),
                 countText: strings(.practiceStep, stepIndex + 1, stepCount))
         back.isEnabled = stepIndex > 0
-        next.title = strings(stepIndex == stepCount - 1 ? .practiceHideTips : .next)
-        let nextWidth = max(next.fittingSize.width, 62)
-        let backWidth = max(back.fittingSize.width, 54)
-        next.frame = CGRect(x: bounds.width - nextWidth - 12, y: 74, width: nextWidth, height: KlikTheme.controlHeight)
-        back.frame = CGRect(x: next.frame.minX - backWidth - 5, y: 74, width: backWidth, height: KlikTheme.controlHeight)
+        configureNext(isLast: stepIndex == stepCount - 1)
+        let buttonWidth = MarkupToolbarLayout.buttonWidth
+        next.frame = CGRect(x: bounds.width - buttonWidth - 12, y: 74, width: buttonWidth, height: KlikTheme.controlHeight)
+        back.frame = CGRect(x: next.frame.minX - buttonWidth - 5, y: 74, width: buttonWidth, height: KlikTheme.controlHeight)
         highlightedButton = step.button
         step.button.coachHighlighted = true
         isHidden = false
@@ -107,11 +106,13 @@ final class CaptureCoach: NSView {
         detail.frame = CGRect(x: 13, y: 34, width: bounds.width - 26, height: 35)
     }
 
-    private func configure(_ button: ForestButton, title: String, action: Selector) {
-        button.title = title
-        button.target = self
-        button.action = action
-        button.refusesFirstResponder = true
+    private func configureNext(isLast: Bool) {
+        let label = strings(isLast ? .practiceHideTips : .next)
+        guard next.toolTip != label else { return }
+        MarkupToolbarLayout.configureButton(next, symbol: isLast ? "x" : "chevron-right",
+            fallback: isLast ? "xmark" : "chevron.right", label: label,
+            target: self, action: #selector(nextStep))
+        next.contentTintColor = KlikTheme.overlayInk
     }
 
     @objc private func previousStep() {

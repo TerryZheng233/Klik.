@@ -4,6 +4,7 @@ import AppKit
 class HoverButton: NSButton {
     private var hoverTracking: NSTrackingArea?
     private(set) var hovered = false
+    var tracksHover: Bool { true }
     var coachHighlighted = false { didSet { updateSurface(animated: true) } }
     var toolSelected = false {
         didSet {
@@ -16,6 +17,7 @@ class HoverButton: NSButton {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
+        guard tracksHover else { return }
         if let hoverTracking { removeTrackingArea(hoverTracking) }
         let area = NSTrackingArea(rect: .zero,
                                   options: [.inVisibleRect, .activeAlways, .mouseEnteredAndExited],
@@ -25,12 +27,16 @@ class HoverButton: NSButton {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        hovered = true
-        updateSurface(animated: true)
+        setHovered(true)
     }
 
     override func mouseExited(with event: NSEvent) {
-        hovered = false
+        setHovered(false)
+    }
+
+    func setHovered(_ hovered: Bool) {
+        guard self.hovered != hovered else { return }
+        self.hovered = hovered
         updateSurface(animated: true)
     }
 

@@ -30,7 +30,8 @@ if [[ -z "$identity" ]]; then
     if [[ -n "$identity" ]]; then local_signing=true; fi
 fi
 sign_options=(--force --sign "${identity:--}")
-if [[ "$local_signing" == true ]]; then sign_options+=(--timestamp=none); fi
+if [[ "$local_signing" == true || -n "${KLIK_SIGN_KEYCHAIN:-}" ]]; then sign_options+=(--timestamp=none); fi
+if [[ -n "${KLIK_SIGN_KEYCHAIN:-}" ]]; then sign_options+=(--keychain "$KLIK_SIGN_KEYCHAIN"); fi
 /usr/bin/codesign "${sign_options[@]}" "$app"
 /usr/bin/codesign --verify --strict "$app"
 installed_app="$destination/Klik.app"

@@ -28,6 +28,7 @@ enum KlikTheme {
 
     static let ink = adaptive(light: primary, dark: cream)
     static let mutedInk = adaptive(light: rgb(0x646145), dark: sand)
+    static let historyTimestamp = adaptive(light: rgb(0x646657), dark: rgb(0xB1B5A2))
     static let outline = adaptive(light: lightOutline, dark: rgb(0x686B49))
     static let inset = adaptive(light: rgb(0xEFE9D2), dark: overlayCanvas)
     static let action = adaptive(light: primary, dark: accent)

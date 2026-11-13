@@ -2,6 +2,22 @@
 
 Changes are listed newest first. / 按版本从新到旧记录。
 
+## 0.1.23 — 2026-11-13
+
+**English**
+
+- Extend a scrolling screenshot above or below the original selection after reaching the page edge. Move the selection with the scroll wheel, then press Enter or click the green check to preview.
+- Crop a stitched screenshot in the preview, or hold Command while scrolling over it to zoom. Press Esc to cancel a scrolling capture or exit the active crop.
+- Type text annotations directly on the image. Enter finishes editing, and Shift Enter inserts a line break. Brush and mosaic cursors show the active size.
+- The GitHub download now uses a consistent macOS signing identity. Updating from 0.1.22 or earlier may ask for Screen Recording permission again during the transition. The download remains unnotarized.
+
+**简体中文**
+
+- 纵向截长图时，到达页面顶部或底部后可向上或向下补全。滚动移动选区，再按 Enter 或点绿色勾预览。
+- 长图预览支持裁剪，在图像上按住 ⌘ 滚动可缩放。按 Esc 可取消滚动截图或退出当前裁剪。
+- 文字标注可以直接在图上输入。Enter 确认，Shift Enter 换行。画笔和马赛克光标会显示当前大小。
+- GitHub 下载版改用固定的 macOS 签名身份。从 0.1.22 或更早版本迁移时，系统可能再次要求授予屏幕录制权限。下载版仍未经 Apple 公证。
+
 ## 0.1.22 — 2026-11-13
 
 **English**

@@ -8,6 +8,11 @@ protocol ScrollCaptureFrameSource: AnyObject {
     func start() async throws
     func finishFrames()
     func stop() async
+    func captureEdge(_ edge: ScrollVerticalEdge, through displayY: CGFloat) async throws -> CGImage?
+}
+
+extension ScrollCaptureFrameSource {
+    func captureEdge(_ edge: ScrollVerticalEdge, through displayY: CGFloat) async throws -> CGImage? { nil }
 }
 
 @MainActor
@@ -15,10 +20,14 @@ final class ScrollFrameSource: ScrollCaptureFrameSource {
     let frames: AsyncThrowingStream<CGImage, Error>
     private let receiver: Receiver
     private let stream: SCStream
+    private let filter: SCContentFilter
+    private let pixelRect: CGRect
+    private let scale: CGFloat
 
     static func make(displayID: CGDirectDisplayID, screenFrame: CGRect, scale: CGFloat,
                      selection: CGRect, excluding windowIDs: Set<CGWindowID>) async throws -> ScrollFrameSource {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        // Include Klik's hidden Extend panel when excluding windows individually.
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         guard let display = content.displays.first(where: { $0.displayID == displayID }),
               NSScreen.screens.contains(where: {
                   $0.frame == screenFrame && $0.backingScaleFactor == scale
@@ -47,10 +56,13 @@ final class ScrollFrameSource: ScrollCaptureFrameSource {
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         configuration.colorSpaceName = CGColorSpace.sRGB
         configuration.showsCursor = false
-        return try ScrollFrameSource(filter: filter, configuration: configuration)
+        return try ScrollFrameSource(filter: filter, configuration: configuration, pixelRect: pixelRect, scale: scale)
     }
 
-    private init(filter: SCContentFilter, configuration: SCStreamConfiguration) throws {
+    private init(filter: SCContentFilter, configuration: SCStreamConfiguration, pixelRect: CGRect, scale: CGFloat) throws {
+        self.filter = filter
+        self.pixelRect = pixelRect
+        self.scale = scale
         let (frames, continuation) = AsyncThrowingStream<CGImage, Error>.makeStream(bufferingPolicy: .bufferingNewest(2))
         self.frames = frames
         receiver = Receiver(continuation: continuation, width: configuration.width, height: configuration.height)
@@ -60,6 +72,23 @@ final class ScrollFrameSource: ScrollCaptureFrameSource {
     }
 
     func start() async throws { try await stream.startCapture() }
+
+    func captureEdge(_ edge: ScrollVerticalEdge, through displayY: CGFloat) async throws -> CGImage? {
+        let top = edge == .top ? (displayY * scale).rounded(.up) : pixelRect.minY
+        let bottom = edge == .bottom ? (displayY * scale).rounded(.down) : pixelRect.maxY
+        let height = Int(bottom - top)
+        guard height > Int(pixelRect.height) else { return nil }
+        let configuration = SCStreamConfiguration()
+        configuration.sourceRect = CGRect(x: pixelRect.minX / scale, y: top / scale,
+                                          width: pixelRect.width / scale, height: CGFloat(height) / scale)
+        configuration.width = Int(pixelRect.width)
+        configuration.height = height
+        configuration.colorSpaceName = CGColorSpace.sRGB
+        configuration.showsCursor = false
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        guard image.width == configuration.width, image.height == height else { throw Failure.frame }
+        return image
+    }
 
     func finishFrames() { receiver.continuation.finish() }
 

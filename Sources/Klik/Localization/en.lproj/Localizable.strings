@@ -52,6 +52,8 @@
 "toolDownload" = "Save PNG";
 "toolCancel" = "Cancel (Esc)";
 "toolConfirm" = "Copy and Finish (Enter)";
+"toolCrop" = "Crop image";
+"cropHint" = "Drag to crop · Enter to apply · Esc to cancel";
 "inkPicker" = "Annotation Color (%@)";
 "inkRed" = "Red";
 "inkOrange" = "Orange";
@@ -142,10 +144,10 @@
 "ocrCopy" = "Copy Text";
 "practiceRecognizeText" = "Recognize and copy text from the selection.";
 "ocrSaveImage" = "Save Image";
-"ocrSaveImageHint" = "Save PNG (Enter; ⌘Enter while editing text)";
+"ocrSaveImageHint" = "Save PNG";
 
 "ocrCancel" = "Cancel Capture (Esc)";
-"ocrConfirm" = "Copy Image and Finish (button)";
+"ocrConfirm" = "Copy Image and Finish (Enter; ⌘Enter in text editor)";
 
 "saveLocation" = "Save location";
 "chooseSaveLocation" = "Choose Folder…";
@@ -186,6 +188,15 @@
 "scrollPartial" = "The last view couldn’t be aligned. This preview ends at the last matched section.";
 "scrollSourceFailed" = "Screen capture was interrupted.";
 "scrollPreviewTitle" = "Scrolling Screenshot Preview";
+"scrollSizeHint" = "Scroll: ⌘ zoom · ⌥ size";
 "scrollDimensions" = "%lld × %lld px";
 "scrollProgressWide" = "%lld px wide. Keep scrolling or click Done.";
+"scrollTopStart" = "Extend";
+"scrollTopReached" = "At the top. Extend to capture more.";
+"scrollTopUnavailable" = "Can’t match this view to the start of the capture. Scroll back to the top and try again.";
+"scrollBottomStart" = "Extend";
+"scrollBottomReached" = "At the bottom. Extend to capture more.";
+"scrollBottomApply" = "Confirm and preview";
+"scrollBottomInstructions" = "Scroll to move the selection. Click the green ✓ or press Enter.";
+"scrollBottomUnavailable" = "Can’t match this view to the end of the capture. Scroll to the last captured position and try again.";
 "scrollMosaicHint" = "Mosaic (Option-scroll to resize; click a stroke to select, move, or delete)";

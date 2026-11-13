@@ -5,8 +5,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let preferences = KlikPreferences()
     private let mosaicScrollHintPolicy = MosaicScrollHintPolicy(defaults: .standard)
     private let history: CaptureHistory
+    private let historyPasteboard: NSPasteboard
     private var historyIssue = false
-    private weak var pendingHistoryClear: ForestButton?
+    private weak var pendingHistoryDeletion: HistoryActionButton?
     private var previewURL: URL?
     private var historyThumbnailTask: Task<Void, Never>?
     private var historyCopyTask: Task<Void, Never>?
@@ -24,8 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var previousForegroundApp: NSRunningApplication?
     private var presentingAlert = false
 
-    init(history: CaptureHistory = CaptureHistory()) {
+    init(history: CaptureHistory = CaptureHistory(), historyPasteboard: NSPasteboard = .general) {
         self.history = history
+        self.historyPasteboard = historyPasteboard
         super.init()
     }
 
@@ -110,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
-        pendingHistoryClear = nil
+        pendingHistoryDeletion = nil
         historyThumbnailTask?.cancel()
         historyCopyTask?.cancel()
         historyCopyTask = nil
@@ -119,12 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @MainActor
-    private func refreshStatusPopover() {
+    private func refreshStatusPopover(scrollOffset: CGFloat = 0) {
         historyThumbnailTask?.cancel()
         historyCopyTask?.cancel()
         historyCopyTask = nil
         historyPreviewTask?.cancel()
-        pendingHistoryClear = nil
+        pendingHistoryDeletion = nil
         let strings = preferences.strings
         let entries: [URL]
         do {
@@ -138,7 +140,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let visibleRows = min(max(entries.count, 1), 5)
         let listHeight = CGFloat(visibleRows * 52)
         let inset: CGFloat = 16
-        let buttonHeight = KlikTheme.controlHeight
         let width: CGFloat = 300
         let height = listHeight + 98
         let content = StatusPopoverView(frame: NSRect(x: 0, y: 0, width: width, height: height))
@@ -150,16 +151,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if historyIssue { title.toolTip = strings(.historyErrorBody) }
         content.addSubview(title)
 
-        let clear = ForestButton(title: strings(.menuHistoryClear), target: self, action: #selector(clearHistory(_:)))
+        let clear = HistoryActionButton(symbol: "trash.fill", label: strings(.menuHistoryClear),
+                                        target: self, action: #selector(clearHistory(_:)))
         clear.isEnabled = !entries.isEmpty
-        clear.frame = CGRect(x: width - inset - 76, y: 11, width: 76, height: buttonHeight)
         content.addSubview(clear)
+        NSLayoutConstraint.activate([
+            clear.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -inset),
+            clear.topAnchor.constraint(equalTo: content.topAnchor, constant: 11)
+        ])
 
-        let scroll = NSScrollView(frame: NSRect(x: inset, y: 46, width: width - 2 * inset, height: listHeight))
+        let scroll = HistoryScrollView(frame: NSRect(x: inset, y: 46, width: width - 2 * inset, height: listHeight))
         scroll.hasVerticalScroller = entries.count > visibleRows
         scroll.drawsBackground = false
         let list = StatusPopoverView(frame: NSRect(x: 0, y: 0, width: scroll.contentSize.width,
                                                   height: max(listHeight, CGFloat(entries.count * 52))))
+        list.autoresizingMask = .width
+        let rowInset = scroll.hasVerticalScroller && scroll.scrollerStyle == .overlay
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .overlay) : 0
         if entries.isEmpty {
             let message = NSTextField(labelWithString: strings(historyIssue ? .historyErrorTitle : .menuHistoryEmpty))
             message.textColor = KlikTheme.mutedInk
@@ -168,32 +176,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         var rows: [(URL, HistoryButton)] = []
         for (index, url) in entries.enumerated() {
-            let item = HistoryButton(frame: NSRect(x: 0, y: CGFloat(index * 52), width: list.bounds.width, height: 50),
-                                     url: url, image: nil,
+            let frame = NSRect(x: 0, y: CGFloat(index * 52), width: list.bounds.width - rowInset, height: 50)
+            let item = HistoryButton(frame: CGRect(origin: .zero, size: frame.size), url: url,
                                      label: HistoryDateFormatter.label(for: url, strings: strings))
             item.target = self
             item.action = #selector(showHistoryPreview(_:))
-            list.addSubview(item)
+            let row = HistoryRow(frame: frame, preview: item, actions: historyActions(for: url))
+            list.addSubview(row)
             rows.append((url, item))
         }
         let history = history
         historyThumbnailTask = Task { @MainActor [weak content] in
             for (url, item) in rows {
                 let thumbnail = await Task.detached(priority: .utility) { history.thumbnail(url) }.value
-                guard !Task.isCancelled, content != nil, item.superview === list else { return }
+                guard !Task.isCancelled, content != nil, item.isDescendant(of: list) else { return }
                 item.setThumbnail(thumbnail)
             }
         }
         scroll.documentView = list
         content.addSubview(scroll)
+        if scrollOffset > 0 {
+            list.scroll(NSPoint(x: 0, y: scrollOffset))
+        }
 
-        let settings = ForestButton(title: strings(.menuSettings), target: self, action: #selector(openSettings))
-        let buttonWidth = (width - 2 * inset - 8) / 2
-        settings.frame = NSRect(x: inset, y: listHeight + 56, width: buttonWidth, height: buttonHeight)
-        content.addSubview(settings)
-        let quit = ForestButton(title: strings(.menuQuit), target: NSApp, action: #selector(NSApplication.terminate(_:)))
-        quit.frame = NSRect(x: inset + buttonWidth + 8, y: listHeight + 56, width: buttonWidth, height: buttonHeight)
-        content.addSubview(quit)
+        let settings = HistoryActionButton(symbol: "gearshape", label: strings(.menuSettings),
+                                           target: self, action: #selector(openSettings))
+        let quit = HistoryActionButton(symbol: "power", label: strings(.menuQuit),
+                                       target: NSApp, action: #selector(NSApplication.terminate(_:)))
+        let footer = historyButtonGroup(settings, quit)
+        content.addSubview(footer)
+        NSLayoutConstraint.activate([
+            footer.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -inset),
+            footer.topAnchor.constraint(equalTo: content.topAnchor, constant: listHeight + 56)
+        ])
         let controller = NSViewController()
         controller.view = content
         statusPopover.contentViewController = controller
@@ -211,15 +226,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @MainActor @objc private func showHistoryPreview(_ sender: HistoryButton) {
+        historyCopyTask?.cancel()
+        historyCopyTask = nil
         historyThumbnailTask?.cancel()
         historyPreviewTask?.cancel()
+        pendingHistoryDeletion = nil
         previewURL = sender.url
         let strings = preferences.strings
         let content = StatusPopoverView(frame: NSRect(x: 0, y: 0, width: 360, height: 330))
         content.isSurface = true
-        let back = ForestButton(title: "‹  " + strings(.back), target: self, action: #selector(backToHistory))
-        back.frame = CGRect(x: 16, y: 10, width: 76, height: KlikTheme.controlHeight)
+        let back = HistoryActionButton(symbol: "chevron.left", label: strings(.back),
+                                       target: self, action: #selector(backToHistory))
         content.addSubview(back)
+        NSLayoutConstraint.activate([
+            back.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            back.topAnchor.constraint(equalTo: content.topAnchor, constant: 10)
+        ])
         let title = NSTextField(labelWithString: strings(.historyPreview))
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.textColor = KlikTheme.ink
@@ -231,18 +253,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         imageView.styleHistoryImage(radius: KlikTheme.badgeRadius)
         content.addSubview(imageView)
         let date = NSTextField(labelWithString: HistoryDateFormatter.label(for: sender.url, strings: strings))
-        date.textColor = KlikTheme.mutedInk
+        date.textColor = KlikTheme.historyTimestamp
         date.font = .systemFont(ofSize: 12)
         date.frame = NSRect(x: 18, y: 280, width: 140, height: 22)
         content.addSubview(date)
-        let delete = ForestButton(title: strings(.historyDelete), target: self, action: #selector(deleteHistory(_:)))
-        delete.frame = CGRect(x: 166, y: 275, width: 72, height: 30)
-        delete.identifier = NSUserInterfaceItemIdentifier("historyDelete")
-        content.addSubview(delete)
-        let copy = ForestButton(title: strings(.historyCopy), target: self, action: #selector(copyHistory))
-        copy.isPrimary = true
-        copy.frame = NSRect(x: 246, y: 275, width: 98, height: 30)
-        content.addSubview(copy)
+        let actions = historyActions(for: sender.url)
+        content.addSubview(actions)
+        NSLayoutConstraint.activate([
+            actions.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            actions.topAnchor.constraint(equalTo: content.topAnchor, constant: 275)
+        ])
         let controller = NSViewController()
         controller.view = content
         statusPopover.contentViewController = controller
@@ -264,18 +284,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @MainActor @objc private func backToHistory() { refreshStatusPopover() }
 
-    @MainActor @objc private func copyHistory() {
-        guard let url = previewURL, historyCopyTask == nil else { return }
+    @MainActor
+    private func historyActions(for url: URL) -> NSView {
+        let strings = preferences.strings
+        let copy = HistoryActionButton(symbol: "square.on.square", label: strings(.historyCopy), url: url,
+                                       target: self, action: #selector(copyHistory(_:)))
+        let delete = HistoryActionButton(symbol: "trash", label: strings(.historyDelete), url: url,
+                                         destructive: true, target: self, action: #selector(deleteHistory(_:)))
+        return historyButtonGroup(copy, delete)
+    }
+
+    @MainActor
+    private func historyButtonGroup(_ left: HistoryActionButton, _ right: HistoryActionButton) -> NSView {
+        let group = NSView()
+        group.translatesAutoresizingMaskIntoConstraints = false
+        group.addSubview(left)
+        group.addSubview(right)
+        NSLayoutConstraint.activate([
+            left.leadingAnchor.constraint(equalTo: group.leadingAnchor),
+            left.topAnchor.constraint(equalTo: group.topAnchor),
+            left.bottomAnchor.constraint(equalTo: group.bottomAnchor),
+            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 4),
+            right.trailingAnchor.constraint(equalTo: group.trailingAnchor),
+            right.centerYAnchor.constraint(equalTo: left.centerYAnchor)
+        ])
+        return group
+    }
+
+    @MainActor
+    private func isCurrentHistoryAction(_ sender: HistoryActionButton) -> Bool {
+        guard statusPopover.isShown, sender.isEnabled,
+              let content = statusPopover.contentViewController?.view else { return false }
+        return sender.isDescendant(of: content)
+    }
+
+    @MainActor @objc private func copyHistory(_ sender: HistoryActionButton) {
+        guard isCurrentHistoryAction(sender), let url = sender.url, historyCopyTask == nil else { return }
         let history = history
         historyCopyTask = Task { @MainActor [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
                 Result { try history.clipboardData(url) }
             }.value
-            guard let self, !Task.isCancelled, self.previewURL == url else { return }
+            guard let self, !Task.isCancelled else { return }
             self.historyCopyTask = nil
             switch result {
             case .success(let (png, tiff)):
-                if ClipboardImage.write(png: png, tiff: tiff, to: .general) {
+                if ClipboardImage.write(png: png, tiff: tiff, to: self.historyPasteboard) {
                     self.statusPopover.performClose(nil)
                 } else {
                     self.showAlert(self.preferences.strings(.historyErrorTitle), self.preferences.strings(.historyErrorBody))
@@ -286,39 +340,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    @MainActor @objc private func deleteHistory(_ sender: ForestButton) {
-        guard statusPopover.isShown, let url = previewURL,
-              sender.superview === statusPopover.contentViewController?.view else { return }
-        if pendingHistoryClear !== sender {
-            pendingHistoryClear = sender
-            sender.title = preferences.strings(.menuHistoryConfirmClear)
-            sender.toolTip = preferences.strings(.historyDeleteConfirmHint)
-            sender.setAccessibilityHelp(sender.toolTip)
-            sender.isDestructive = true
-            return
-        }
+    @MainActor @objc private func deleteHistory(_ sender: HistoryActionButton) {
+        guard isCurrentHistoryAction(sender), let url = sender.url,
+              confirmHistoryDeletion(sender, hint: .historyDeleteConfirmHint) else { return }
+        let scrollOffset = sender.enclosingScrollView?.contentView.bounds.minY ?? 0
         do {
             try history.remove(url)
             historyIssue = false
         } catch {
             historyIssue = true
         }
-        refreshStatusPopover()
+        refreshStatusPopover(scrollOffset: scrollOffset)
     }
 
-    @MainActor @objc private func clearHistory(_ sender: ForestButton) {
-        guard statusPopover.isShown, sender.isEnabled,
-              let content = statusPopover.contentViewController?.view, sender.superview === content else { return }
-        if pendingHistoryClear !== sender {
-            pendingHistoryClear = sender
-            let strings = preferences.strings
-            let hint = strings(.menuHistoryConfirmClearHint)
-            sender.title = strings(.menuHistoryConfirmClear)
-            sender.toolTip = hint
-            sender.setAccessibilityHelp(hint)
-            sender.isDestructive = true
-            return
-        }
+    @MainActor
+    private func confirmHistoryDeletion(_ sender: HistoryActionButton, hint: UIKey) -> Bool {
+        if pendingHistoryDeletion === sender { return true }
+        pendingHistoryDeletion?.setConfirmation(nil)
+        pendingHistoryDeletion = sender
+        let strings = preferences.strings
+        sender.setConfirmation(strings(.menuHistoryConfirmClear), hint: strings(hint))
+        return false
+    }
+
+    @MainActor @objc private func clearHistory(_ sender: HistoryActionButton) {
+        guard isCurrentHistoryAction(sender),
+              confirmHistoryDeletion(sender, hint: .menuHistoryConfirmClearHint) else { return }
         do {
             try history.clear()
             historyIssue = false
@@ -560,8 +607,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard NSEvent.pressedMouseButtons == 0, let current = overlay, !current.isRecognizingText,
               let next = screenPanels.first(where: { $0.frame.contains(NSEvent.mouseLocation) }),
               next !== current else { return }
+        let windowSnapHeld = current.isWindowSnapHeld
         current.orderOut(nil)
         overlay = next
+        next.isWindowSnapHeld = windowSnapHeld
         next.alphaValue = 0
         _ = next.present()
     }
@@ -701,27 +750,186 @@ private final class StatusPopoverView: NSView {
     }
 }
 
+private final class HistoryActionButton: HoverButton {
+    let url: URL?
+    private let label: String
+    private let symbolImage: NSImage?
+    private let iconTint: NSColor
+    private var confirming = false
+    private lazy var controlWidth = widthAnchor.constraint(equalToConstant: 34)
+
+    init(symbol: String, label: String, url: URL? = nil, destructive: Bool = false,
+         target: AnyObject, action: Selector) {
+        self.url = url
+        self.label = label
+        self.symbolImage = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .medium))
+        self.iconTint = destructive ? KlikTheme.danger : KlikTheme.ink
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isBordered = false
+        focusRingType = .exterior
+        setButtonType(.momentaryChange)
+        self.target = target
+        self.action = action
+        NSLayoutConstraint.activate([
+            controlWidth, heightAnchor.constraint(equalToConstant: KlikTheme.controlHeight)
+        ])
+        setConfirmation(nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    func setConfirmation(_ confirmation: String?, hint: String? = nil) {
+        confirming = confirmation != nil
+        controlWidth.constant = confirming ? 68 : 34
+        image = confirming ? nil : symbolImage
+        title = confirmation ?? (symbolImage == nil ? label : "")
+        if let confirmation {
+            attributedTitle = NSAttributedString(string: confirmation, attributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: KlikTheme.danger
+            ])
+        }
+        imagePosition = confirming || symbolImage == nil ? .noImage : .imageOnly
+        contentTintColor = confirming ? KlikTheme.danger : iconTint
+        toolTip = hint ?? label
+        setAccessibilityLabel(hint ?? label)
+        setAccessibilityHelp(hint)
+        updateSurface(animated: true)
+    }
+
+    override func updateSurface(animated: Bool) {
+        guard confirming, let layer else {
+            super.updateSurface(animated: animated)
+            return
+        }
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            KlikTheme.setBackground(KlikTheme.dangerSurface.cgColor, on: layer,
+                                    animated: animated && window?.isVisible == true)
+        }
+    }
+}
+
+private final class HistoryScrollView: NSScrollView {
+    private var pointerLocation: CGPoint?
+    private weak var hoveredRow: HistoryRow?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // Track the fixed viewport as the rows move underneath the pointer.
+        addTrackingArea(NSTrackingArea(rect: .zero,
+            options: [.inVisibleRect, .activeAlways, .mouseEnteredAndExited, .mouseMoved],
+            owner: self, userInfo: nil))
+        contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(viewportDidScroll),
+            name: NSView.boundsDidChangeNotification, object: contentView)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func mouseEntered(with event: NSEvent) { mouseMoved(with: event) }
+
+    override func mouseMoved(with event: NSEvent) {
+        pointerLocation = event.locationInWindow
+        updateHoveredRow()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        pointerLocation = nil
+        updateHoveredRow()
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        if event.momentumPhase.isEmpty { mouseMoved(with: event) }
+        super.scrollWheel(with: event)
+    }
+
+    @objc private func viewportDidScroll() {
+        updateHoveredRow()
+    }
+
+    private func updateHoveredRow() {
+        var next: HistoryRow?
+        if let pointerLocation, let list = documentView,
+           contentView.bounds.contains(contentView.convert(pointerLocation, from: nil)) {
+            let point = list.convert(pointerLocation, from: nil)
+            next = list.subviews.first { $0 is HistoryRow && $0.frame.contains(point) } as? HistoryRow
+        }
+        guard next !== hoveredRow else { return }
+        hoveredRow?.setHovered(false)
+        hoveredRow = next
+        next?.setHovered(true)
+    }
+}
+
+private final class HistoryRow: NSView {
+    private let preview: HistoryButton
+    private let actions: NSView
+
+    override var isFlipped: Bool { true }
+
+    init(frame: NSRect, preview: HistoryButton, actions: NSView) {
+        self.preview = preview
+        self.actions = actions
+        super.init(frame: frame)
+        autoresizingMask = .width
+        preview.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(preview)
+        addSubview(actions)
+        actions.isHidden = true
+        NSLayoutConstraint.activate([
+            preview.leadingAnchor.constraint(equalTo: leadingAnchor),
+            preview.trailingAnchor.constraint(equalTo: trailingAnchor),
+            preview.topAnchor.constraint(equalTo: topAnchor),
+            preview.bottomAnchor.constraint(equalTo: bottomAnchor),
+            actions.trailingAnchor.constraint(equalTo: trailingAnchor),
+            actions.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    func setHovered(_ hovered: Bool) {
+        preview.setHovered(hovered)
+        preview.timestamp.isHidden = hovered
+        actions.isHidden = !hovered
+        if !hovered {
+            for case let button as HoverButton in actions.subviews { button.setHovered(false) }
+        }
+    }
+}
+
 private final class HistoryButton: HoverButton {
+    override var tracksHover: Bool { false }
     let url: URL
+    let timestamp: NSTextField
     private let thumbnail = PassiveImageView(frame: NSRect(x: 6, y: 5, width: 52, height: 40))
 
     func setThumbnail(_ image: NSImage?) { thumbnail.image = image }
 
-    init(frame: NSRect, url: URL, image: NSImage?, label: String) {
+    init(frame: NSRect, url: URL, label: String) {
         self.url = url
+        self.timestamp = PassiveTextField(labelWithString: label)
         super.init(frame: frame)
         isBordered = false
         title = ""
         setAccessibilityLabel(label)
-        thumbnail.image = image
         thumbnail.imageScaling = .scaleProportionallyUpOrDown
         thumbnail.styleHistoryImage(radius: KlikTheme.controlRadius)
         addSubview(thumbnail)
-        let text = PassiveTextField(labelWithString: label)
-        text.font = .systemFont(ofSize: 13)
-        text.textColor = KlikTheme.ink
-        text.frame = NSRect(x: 70, y: 16, width: frame.width - 76, height: 18)
-        addSubview(text)
+        timestamp.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        timestamp.textColor = KlikTheme.historyTimestamp
+        timestamp.alignment = .right
+        timestamp.lineBreakMode = .byTruncatingTail
+        timestamp.frame = NSRect(x: 70, y: 16, width: frame.width - 78, height: 18)
+        timestamp.autoresizingMask = .width
+        addSubview(timestamp)
     }
 
     required init?(coder: NSCoder) { nil }

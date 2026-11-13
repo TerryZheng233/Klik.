@@ -127,12 +127,21 @@ enum UIKey: String, CaseIterable {
     case scrollReady
     case scrollProgress
     case scrollProgressWide
+    case scrollTopStart
+    case scrollTopReached
+    case scrollTopUnavailable
+    case scrollBottomStart
+    case scrollBottomReached
+    case scrollBottomApply
+    case scrollBottomInstructions
+    case scrollBottomUnavailable
     case scrollUnaligned
     case scrollLimit
     case scrollFinishing
     case scrollPartial
     case scrollSourceFailed
     case scrollPreviewTitle
+    case scrollSizeHint
     case scrollDimensions
     case scrollMosaicHint
     case ocrTitle
@@ -154,6 +163,8 @@ enum UIKey: String, CaseIterable {
     case toolDownload
     case toolCancel
     case toolConfirm
+    case toolCrop
+    case cropHint
     case inkPicker
     case inkCustom
     case inkSample

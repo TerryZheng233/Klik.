@@ -409,7 +409,10 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
                                              size: 12, color: KlikTheme.danger))
             footer.addArrangedSubview(button(strings(.chooseAnotherShortcut), #selector(chooseAnotherShortcut)))
         }
-        if !firstRun { footer.addArrangedSubview(button(strings(.back), #selector(returnToSettings))) }
+        if !firstRun {
+            footer.addArrangedSubview(iconButton("chevron-left", fallback: "chevron.left",
+                label: .back, action: #selector(returnToSettings)))
+        }
         footer.addArrangedSubview(button(strings(.practiceStart), #selector(startPracticeFromButton), primary: true))
     }
 
@@ -517,6 +520,7 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
             locationSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             locationRow.addArrangedSubview(locationSpacer)
             let locationActions = stack(.vertical, spacing: 5)
+            locationActions.alignment = .trailing
             let choose = button(strings(.chooseSaveLocation), #selector(chooseSaveLocation))
             choose.widthAnchor.constraint(equalToConstant: settingsControlWidth).isActive = true
             locationActions.addArrangedSubview(choose)
@@ -598,7 +602,8 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
 
         if reviewing {
             if recording {
-                footer.addArrangedSubview(button(strings(.cancelRecording), #selector(cancelRecording)))
+                footer.addArrangedSubview(iconButton("x", fallback: "xmark",
+                    label: .cancelRecording, action: #selector(cancelRecording)))
             } else {
                 if !selected.matches(.defaultShortcut) {
                     footer.addArrangedSubview(button(strings(.restoreDefault), #selector(restoreDefault)))
@@ -650,6 +655,20 @@ final class ShortcutSetup: NSWindowController, NSWindowDelegate {
         }
         return button
     }
+
+    private func iconButton(_ symbol: String, fallback: String, label: UIKey, action: Selector) -> NSButton {
+        let button = HoverButton()
+        MarkupToolbarLayout.configureButton(button, symbol: symbol, fallback: fallback,
+            label: strings(label), target: self, action: action)
+        button.contentTintColor = symbol == "x" ? KlikTheme.danger : KlikTheme.ink
+        button.refusesFirstResponder = false
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: MarkupToolbarLayout.buttonWidth),
+            button.heightAnchor.constraint(equalToConstant: KlikTheme.controlHeight)
+        ])
+        return button
+    }
 }
 
 // A native button-backed toggle gives the login setting a consistent accent,
@@ -674,20 +693,24 @@ private final class ForestSwitch: NSButton {
     override var focusRingMaskBounds: NSRect { trackRect }
 
     private var trackRect: CGRect {
-        CGRect(x: 0, y: bounds.midY - 10, width: 40, height: 20)
+        CGRect(x: bounds.midX - 20, y: bounds.midY - 10, width: 40, height: 20)
     }
 
-    override func drawFocusRingMask() {
-        let radius = KlikTheme.controlRadius
-        NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius).fill()
+    private var trackPath: NSBezierPath {
+        let radius = trackRect.height / 2
+        return NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius)
     }
+
+    override func drawFocusRingMask() { trackPath.fill() }
 
     override func draw(_ dirtyRect: NSRect) {
-        let radius = KlikTheme.controlRadius
-        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: radius, yRadius: radius)
+        let track = trackRect
         (state == .on ? KlikTheme.action : KlikTheme.outline).setFill()
         trackPath.fill()
-        let knob = CGRect(x: state == .on ? 21 : 3, y: bounds.midY - 8, width: 16, height: 16)
+        let inset: CGFloat = 2
+        let diameter = track.height - 2 * inset
+        let knobX = state == .on ? track.maxX - inset - diameter : track.minX + inset
+        let knob = CGRect(x: knobX, y: track.minY + inset, width: diameter, height: diameter)
         (state == .on ? KlikTheme.actionInk : KlikTheme.card).setFill()
         NSBezierPath(ovalIn: knob).fill()
     }

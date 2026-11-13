@@ -1,5 +1,9 @@
 import CoreGraphics
 
+enum ScrollVerticalEdge: CaseIterable {
+    case top, bottom
+}
+
 enum ScrollAxis: CaseIterable {
     case vertical, horizontal
 
@@ -37,7 +41,7 @@ struct ScrollStitcher {
     }
 
     private static let maximumPixels = 40_000_000
-    private static let maximumLength = 30_000
+    static let maximumLength = 30_000
 
     private var firstImage: CGImage?
     private var startingSamples: [ScrollAxis: ScrollAlignment.Frame] = [:]
@@ -48,6 +52,11 @@ struct ScrollStitcher {
     private var viewportLength = 0
     private var pending: PendingEdge?
     private(set) var axis: ScrollAxis?
+    var scrollOrigin: Int? { pending?.frame.origin ?? tracking?.origin }
+    func isAtEdge(_ edge: ScrollVerticalEdge) -> Bool {
+        guard axis == .vertical, let tracking, let boundary = edge == .top ? leading : trailing else { return false }
+        return tracking.origin == boundary.origin
+    }
     var length: Int {
         guard let first = strips.first, let last = strips.last else { return firstImage?.height ?? 0 }
         return last.end - first.origin
@@ -210,6 +219,34 @@ struct ScrollStitcher {
         }
         tracking = frame
         pending = nil
+        return .extended
+    }
+
+    func availableRows(at edge: ScrollVerticalEdge, from image: CGImage) -> Int {
+        let extraRows = image.height - viewportLength
+        let overlapStart = edge == .top ? extraRows : 0
+        guard isAtEdge(edge), let boundary = edge == .top ? leading : trailing,
+              image.width == strips.first?.image.width, extraRows > 0,
+              let overlap = ScrollAxis.vertical.crop(image, from: overlapStart, to: overlapStart + viewportLength),
+              let samples = ScrollAlignment.Frame(overlap, axis: .vertical) else { return 0 }
+        if case .stationary = ScrollAlignment.match(boundary.samples, samples) { return extraRows }
+        return 0
+    }
+
+    mutating func extendEdge(_ edge: ScrollVerticalEdge, from image: CGImage, extraRows: Int) -> Update {
+        guard extraRows > 0 else { return .waiting }
+        guard let first = strips.first, let last = strips.last,
+              extraRows <= availableRows(at: edge, from: image) else { return .unaligned }
+        let newLength = length + extraRows
+        guard newLength <= Self.maximumLength, newLength <= Self.maximumPixels / image.width else { return .limit }
+        let start = edge == .top ? image.height - viewportLength - extraRows : viewportLength
+        guard let segment = Self.copy(ScrollAxis.vertical.crop(image, from: start, to: start + extraRows)) else { return .limit }
+        switch edge {
+        case .top:
+            strips.insert(Strip(origin: first.origin - extraRows, end: first.origin, image: segment), at: 0)
+        case .bottom:
+            strips.append(Strip(origin: last.end, end: last.end + extraRows, image: segment))
+        }
         return .extended
     }
 

@@ -73,7 +73,7 @@ final class TextRecognitionView: NSView {
     private let refreshButton = HoverButton()
     private let refreshConfirmation = NSVisualEffectView()
     private let refreshConfirmTitle = NSTextField(labelWithString: "")
-    private let refreshConfirmCancel = ForestButton()
+    private let refreshConfirmCancel = HoverButton()
     private let refreshConfirmReplace = ForestButton()
     private var confirmRefreshAction: (() -> Void)?
     var onCopy: ((String) -> Void)?
@@ -161,10 +161,9 @@ final class TextRecognitionView: NSView {
         refreshConfirmTitle.alignment = .center
         refreshConfirmTitle.lineBreakMode = .byTruncatingTail
         refreshConfirmation.addSubview(refreshConfirmTitle)
-        refreshConfirmCancel.title = strings(.cancel)
+        MarkupToolbarLayout.configureButton(refreshConfirmCancel, symbol: "x", fallback: "xmark",
+            label: strings(.cancel), target: self, action: #selector(cancelRefreshConfirmation))
         refreshConfirmCancel.identifier = NSUserInterfaceItemIdentifier("ocrRefreshCancel")
-        refreshConfirmCancel.target = self
-        refreshConfirmCancel.action = #selector(cancelRefreshConfirmation)
         refreshConfirmation.addSubview(refreshConfirmCancel)
         refreshConfirmReplace.title = strings(.ocrReplaceButton)
         refreshConfirmReplace.isPrimary = true
@@ -203,7 +202,8 @@ final class TextRecognitionView: NSView {
     func isEditingText(_ responder: NSResponder?) -> Bool { responder === textView }
     var isEditingMarkupText: Bool { imageCard.isEditingMarkupText }
     func commitMarkupText() { imageCard.commitText() }
-    func beginMarkupText(at point: CGPoint, size: CGFloat, existing: String? = nil) { imageCard.beginText(at: point, placeholder: strings(.textPlaceholder), size: size, existing: existing) }
+    func cancelMarkupText() { imageCard.cancelText() }
+    func beginMarkupText(at point: CGPoint, size: CGFloat, ink: Ink, existing: String? = nil) { imageCard.beginText(at: point, size: size, ink: ink, existing: existing) }
     func updateMarkupTextSize(_ value: CGFloat) { imageCard.updateTextSize(value) }
     func setMarkupHandlers(down: @escaping (CGPoint, Int) -> Void, drag: @escaping (CGPoint, NSEvent.ModifierFlags) -> Void,
                            up: @escaping (CGPoint, NSEvent.ModifierFlags) -> Void, text: @escaping (String, CGPoint) -> Void) {
@@ -396,7 +396,7 @@ final class TextRecognitionView: NSView {
                                            width: confirmationWidth, height: confirmationHeight)
         refreshConfirmTitle.frame = CGRect(x: 8, y: 37, width: max(1, confirmationWidth - 16), height: 18)
         let buttonSpace = max(0, confirmationWidth - 20)
-        let cancelWidth = buttonSpace * 0.42
+        let cancelWidth = min(MarkupToolbarLayout.buttonWidth, buttonSpace * 0.42)
         let replaceWidth = buttonSpace - cancelWidth
         refreshConfirmCancel.frame = CGRect(x: 7, y: 5, width: cancelWidth, height: KlikTheme.controlHeight)
         refreshConfirmReplace.frame = CGRect(x: refreshConfirmCancel.frame.maxX + 6, y: 5, width: replaceWidth, height: KlikTheme.controlHeight)
@@ -447,6 +447,10 @@ final class TextRecognitionView: NSView {
         statusLabel.stringValue = strings(.ocrEditedImageChanged)
         statusLabel.toolTip = statusLabel.stringValue
         statusLabel.isHidden = false
+        if !isDrawing {
+            textView.isEditable = true
+            refreshButton.isEnabled = true
+        }
         copyButton.isEnabled = !isDrawing && !textView.string.isEmpty
         layoutControls()
         return true

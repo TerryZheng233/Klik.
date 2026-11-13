@@ -19,3 +19,23 @@ For a release such as `v0.1.19`:
 `swift Scripts/update-signing.swift public` shows only the public key. `generate` creates a key only if none exists; it never replaces one. A newly generated key on another machine will not match the pinned key until the app is deliberately updated to trust it.
 
 Existing released versions, including 0.1.18, do not enforce this independent signature. Installing a version containing this change establishes the pinned public key for subsequent updates; the original installation and older updaters cannot acquire this protection retroactively.
+
+## macOS release code signing
+
+The release app uses the certificate fingerprint recorded in
+`Scripts/release-certificate.sha1`. Keep the corresponding private key and a
+recoverable, encrypted backup safe. The fingerprint and certificate are public;
+the private key and its recovery password must never be committed. Losing the
+private key or replacing the certificate changes the designated requirement.
+
+Set `KLIK_SIGN_IDENTITY` to the certificate fingerprint and, when using a
+separate keychain, set `KLIK_SIGN_KEYCHAIN` to its path before running
+`build-app.sh`. Use an unsynced output directory. Then run
+`Scripts/package-release.sh /path/to/Klik.app /path/to/output`. It checks
+the fixed certificate, designated requirement, bundle ID, version and
+architecture both before and after DMG packaging, then signs the final DMG
+using the existing independent Ed25519 key.
+
+The self-signed app is not notarized. The move from the earlier ad-hoc release
+may require Screen Recording authorization again. Check migration and subsequent
+updates on a clean Mac before publishing.

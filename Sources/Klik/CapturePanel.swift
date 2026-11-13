@@ -147,6 +147,10 @@ final class CapturePanel: NSPanel {
     }
 
     var isRecognizingText: Bool { canvas.isRecognizingText }
+    var isWindowSnapHeld: Bool {
+        get { canvas.isWindowSnapHeld }
+        set { canvas.setWindowSnapHeld(newValue, at: mouseLocationOutsideOfEventStream) }
+    }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -166,6 +170,7 @@ final class CapturePanel: NSPanel {
     override func orderOut(_ sender: Any?) {
         canvas.cancelWindowCapture()
         canvas.cancelExport()
+        isWindowSnapHeld = false
         canvas.clearPointer()
         super.orderOut(sender)
     }
@@ -177,16 +182,26 @@ final class CapturePanel: NSPanel {
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
             if event.type == .keyDown, !composing, modifiers.isEmpty,
                Int(event.keyCode) == kVK_Escape {
-                canvas.cancel()
+                if canvas.isEditingRecognitionMarkup {
+                    canvas.cancelActiveTextEditing()
+                } else if canvas.isEditingRecognitionText(firstResponder) {
+                    makeFirstResponder(canvas)
+                } else {
+                    canvas.cancel()
+                }
             } else if event.type == .keyDown, !composing,
                       Int(event.keyCode) == kVK_Return || Int(event.keyCode) == kVK_ANSI_KeypadEnter,
                       canvas.isEditingRecognitionMarkup, modifiers.isEmpty {
                 canvas.finishRecognitionMarkupText()
             } else if event.type == .keyDown, !composing,
                       Int(event.keyCode) == kVK_Return || Int(event.keyCode) == kVK_ANSI_KeypadEnter,
-                      (modifiers.isEmpty && !canvas.isEditingRecognitionText(firstResponder))
-                        || modifiers == .command {
-                canvas.saveImageFromTextRecognition()
+                      canvas.isEditingRecognitionMarkup, modifiers == .shift {
+                (firstResponder as? InlineMarkupTextView)?.insertNewline(nil)
+            } else if event.type == .keyDown, !composing,
+                      Int(event.keyCode) == kVK_Return || Int(event.keyCode) == kVK_ANSI_KeypadEnter,
+                      !canvas.isEditingRecognitionMarkup,
+                      (modifiers.isEmpty && !canvas.isEditingRecognitionText(firstResponder)) || modifiers == .command {
+                if !event.isARepeat { canvas.copyImageFromTextRecognition() }
             } else if event.type == .keyDown, !composing, modifiers.isEmpty,
                       [kVK_Delete, kVK_ForwardDelete].contains(Int(event.keyCode)),
                       !canvas.isEditingRecognitionText(firstResponder), !canvas.isEditingRecognitionMarkup {
@@ -209,29 +224,41 @@ final class CapturePanel: NSPanel {
             return
         }
         if event.type == .flagsChanged { canvas.selectionModifiersChanged(event.modifierFlags) }
-        if event.type == .keyUp, Int(event.keyCode) == kVK_Space, canvas.isWindowSnapHeld {
-            canvas.setWindowSnapHeld(false, at: mouseLocationOutsideOfEventStream)
+        if event.type == .keyUp, Int(event.keyCode) == kVK_Space, isWindowSnapHeld {
+            isWindowSnapHeld = false
             return
         }
         if event.type == .keyDown {
             let key = Int(event.keyCode)
             let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
             if key == kVK_Escape && !composing {
-                canvas.cancel()
+                if canvas.isCropping { canvas.cancelCrop() }
+                else if canvas.isEditingText { canvas.cancelActiveTextEditing() }
+                else { canvas.cancel() }
                 return
             }
             if !composing, key == kVK_Return || key == kVK_ANSI_KeypadEnter {
-                if canvas.isEditingText {
-                    canvas.finishTextEditing()
+                if canvas.isCropping {
+                    canvas.applyCrop()
+                    return
+                } else if canvas.isEditingText {
+                    let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+                    if modifiers.isEmpty {
+                        canvas.finishTextEditing()
+                        return
+                    } else if modifiers == .shift {
+                        (firstResponder as? InlineMarkupTextView)?.insertNewline(nil)
+                        return
+                    }
                 } else {
-                    canvas.export(.clipboard)
+                    if !event.isARepeat { canvas.export(.clipboard) }
+                    return
                 }
-                return
             }
 
             let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
             if key == kVK_Space, modifiers.isEmpty, canvas.canSnapToWindow {
-                if !event.isARepeat { canvas.setWindowSnapHeld(true, at: mouseLocationOutsideOfEventStream) }
+                if !event.isARepeat { isWindowSnapHeld = true }
                 return
             }
             if !composing, !canvas.isEditingText, modifiers.isEmpty,
@@ -302,6 +329,35 @@ private final class BrushOutline: NSView {
         outline.lineWidth = 3
         outline.stroke()
         NSColor.white.withAlphaComponent(0.95).setStroke()
+        outline.lineWidth = 1
+        outline.stroke()
+    }
+}
+
+private final class MosaicCursorView: NSView {
+    var source: CaptureImage?
+    var capturePoint = CGPoint.zero
+    var diameter: CGFloat = 30
+    var imageScale: CGFloat = 1
+    var style: MosaicStyle = .pixel
+    var color: CoverColor = .fallback
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let source, let context = NSGraphicsContext.current?.cgContext else { return }
+        context.saveGState()
+        context.translateBy(x: bounds.midX, y: bounds.midY)
+        context.scaleBy(x: imageScale, y: imageScale)
+        context.translateBy(x: -capturePoint.x, y: -capturePoint.y)
+        Mark.mosaic([capturePoint], diameter: diameter, style: style, color: color)
+            .draw(in: context, background: source, isPreview: true)
+        context.restoreGState()
+        let outline = NSBezierPath(ovalIn: bounds.insetBy(dx: 2, dy: 2))
+        NSColor.black.withAlphaComponent(0.85).setStroke()
+        outline.lineWidth = 3
+        outline.stroke()
+        NSColor.white.setStroke()
         outline.lineWidth = 1
         outline.stroke()
     }
@@ -497,6 +553,14 @@ final class CaptureView: NSView {
         case resizeMark(Int, Mark, Selection.Handle, CGPoint, [Mark])
         case mark(Tool, CGPoint)
         case selectMark(Int, CGPoint)
+        case cropDraw(CGPoint)
+        case cropResize(Selection.Handle, CGRect, CGPoint)
+        case cropMove(CGRect, CGPoint)
+    }
+
+    private struct EditSnapshot {
+        let marks: [Mark]
+        let selection: CGRect?
     }
 
     enum Pointer: Equatable {
@@ -507,7 +571,7 @@ final class CaptureView: NSView {
             switch self {
             case .crosshair: return .crosshair
             case .arrow: return .arrow
-            case .canvasPoint: return Self.canvasPointCursor(for: .red)
+            case .canvasPoint: return Self.canvasPointCursor(for: .red, diameter: 5)
             case .hand: return .pointingHand
             case .openHand: return .openHand
             case .closedHand: return .closedHand
@@ -518,9 +582,12 @@ final class CaptureView: NSView {
             }
         }
 
-        static func canvasPointCursor(for ink: Ink) -> NSCursor {
-            let image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
-                let dot = NSBezierPath(ovalIn: NSRect(x: 5.5, y: 5.5, width: 5, height: 5))
+        static func canvasPointCursor(for ink: Ink, diameter: CGFloat = 5) -> NSCursor {
+            let side = ceil(diameter + 12)
+            let center = side / 2
+            let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
+                let dot = NSBezierPath(ovalIn: NSRect(x: center - diameter / 2, y: center - diameter / 2,
+                                                       width: diameter, height: diameter))
                 NSGraphicsContext.saveGraphicsState()
                 let glow = NSShadow()
                 glow.shadowColor = ink.color.withAlphaComponent(0.55)
@@ -540,7 +607,17 @@ final class CaptureView: NSView {
                 dot.fill()
                 return true
             }
-            return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 8))
+            return NSCursor(image: image, hotSpot: NSPoint(x: center, y: center))
+        }
+
+        static func textCursor(for ink: Ink, size: CGFloat) -> NSCursor {
+            let attributes = MarkupTextStyle.attributes(ink: ink, size: size)
+            let textSize = ("A" as NSString).size(withAttributes: attributes)
+            let image = NSImage(size: NSSize(width: ceil(textSize.width) + 4, height: ceil(textSize.height) + 4), flipped: true) { _ in
+                ("A" as NSString).draw(at: CGPoint(x: 2, y: 2), withAttributes: attributes)
+                return true
+            }
+            return NSCursor(image: image, hotSpot: NSPoint(x: 2, y: 2))
         }
 
         private static let eyedropperCursor: NSCursor = {
@@ -587,6 +664,7 @@ final class CaptureView: NSView {
     private var exportCommitted = false
     var onDocumentExport: ((Destination, CGImage) -> Void)?
     var onDocumentStatus: ((String) -> Void)?
+    var onDocumentSizeChange: ((CGSize) -> Void)?
     private var windowImage: CaptureImage?
     private var background: CaptureImage { windowImage ?? desktop }
     private let windowTargets: [WindowSnap]
@@ -632,7 +710,7 @@ final class CaptureView: NSView {
                                              horizontalPadding: 8, verticalPadding: 4)
     private let pointerView = PointerView()
     private let eyedropperPreview = EyedropperPreview(frame: CGRect(x: 0, y: 0, width: 17, height: 17))
-    private let brushOutline = BrushOutline()
+    private let brushOutline = MosaicCursorView()
     private let mosaicScrollHint = MosaicScrollHint(frame: CGRect(x: 0, y: 0, width: 30, height: 26))
     private var scrollHintAvailable: Bool
     private let scrollHintPolicy: MosaicScrollHintPolicy
@@ -646,13 +724,24 @@ final class CaptureView: NSView {
     private var toolbarButtons: [NSButton] = []
     private var toolButtons: [Tool: NSButton] = [:]
     private var paletteButtons: [Ink: NSButton] = [:]
-    private var selection: CGRect?
+    private var selection: CGRect? {
+        didSet {
+            guard let onDocumentSizeChange, let selection, selection != oldValue else { return }
+            onDocumentSizeChange(background.pixelRect(for: selection).size)
+        }
+    }
     private var draftSelection: CGRect?
     private(set) var isWindowSnapHeld = false
     private var hoveredWindow: CGRect?
     private(set) var marks: [Mark] = []
-    private var undoMarks: [[Mark]] = []
-    private var redoMarks: [[Mark]] = []
+    private var undoMarks: [EditSnapshot] = []
+    private var redoMarks: [EditSnapshot] = []
+    private var snapshot: EditSnapshot { EditSnapshot(marks: marks, selection: selection) }
+    private(set) var cropRect: CGRect?
+    private var cropBounds: CGRect?
+    var isCropping: Bool { cropRect != nil }
+    private let cropButton = HoverButton()
+    private let cropHint = CaptureBadge(font: .systemFont(ofSize: 12, weight: .medium))
     private var selectedMark: Int?
     private var preview: Mark?
     private var drag: Drag?
@@ -662,13 +751,15 @@ final class CaptureView: NSView {
     private var tool: Tool?
     private var ink: Ink = .red
     private var showPalette = false
-    private var textField: NSTextField?
+    private var textField: InlineMarkupTextView?
     private var textOrigin = CGPoint.zero
     private var editingTextMark: (index: Int, original: Mark)?
     private var pointerTracking: NSTrackingArea?
     private(set) var pointer: Pointer?
     private var pointerHotSpot = CGPoint.zero
     private var pointCursorInk: Ink?
+    private var pointCursorDiameter: CGFloat?
+    private var pointCursorTextSize: CGFloat?
     private var cachedPointCursor: NSCursor?
     private var systemCursorHidden = false
 
@@ -719,6 +810,9 @@ final class CaptureView: NSView {
         modeHint.identifier = NSUserInterfaceItemIdentifier("captureModeHint")
         selectionSize.identifier = NSUserInterfaceItemIdentifier("capturePixelSize")
         addSubview(modeHint)
+        cropHint.text = strings(.cropHint)
+        cropHint.isHidden = true
+        addSubview(cropHint)
         addSubview(errorLabel)
         addSubview(selectionSize)
         sizeFeedback.identifier = NSUserInterfaceItemIdentifier("markupSizeFeedback")
@@ -850,6 +944,9 @@ final class CaptureView: NSView {
             } else { next = .arrow }
         } else if hoveredWindow != nil {
             next = .hand
+        } else if let cropRect {
+            if let handle = Selection.Handle.hit(at: point, in: cropRect) { next = .resize(handle) }
+            else { next = .crosshair }
         } else if let textField, textField.frame.contains(point) {
             next = .text
         } else if !isDocument && ((!toolbar.isHidden && toolbar.frame.contains(point))
@@ -901,7 +998,7 @@ final class CaptureView: NSView {
             scale = 1
         }
         let showBrush = tool == .mosaic && inImage && drag == nil && next == .canvasPoint
-        brushOutline.isHidden = !showBrush || !sizeOutline.isHidden
+        brushOutline.isHidden = !showBrush
         if !sizeFeedback.isHidden { positionTextSizePreview(at: point) }
         if !sizeOutline.isHidden {
             sizeOutline.frame.origin = CGPoint(x: point.x - sizeOutline.frame.width / 2,
@@ -910,10 +1007,16 @@ final class CaptureView: NSView {
         if showBrush {
             let size = mosaicDiameter * scale + 4
             brushOutline.frame = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+            brushOutline.source = background
+            brushOutline.capturePoint = recognitionView?.capturePoint(at: point) ?? point
+            brushOutline.diameter = mosaicDiameter
+            brushOutline.imageScale = scale
+            brushOutline.style = mosaicStyle
+            brushOutline.color = strokeColor
             brushOutline.needsDisplay = true
         }
         if !scrollHintStarted && !scrollHintPolicy.shouldShow { scrollHintAvailable = false }
-        let wheelEligible = (tool != nil || selectedMark != nil) && inImage && drag == nil
+        let wheelEligible = !isCropping && (tool != nil || selectedMark != nil) && inImage && drag == nil
             && !isEditingText && !isEditingRecognitionMarkup && !pickingInkColor && !pickingCoverColor
             && next != .text
         mosaicScrollHint.isHidden = !wheelEligible || !scrollHintAvailable
@@ -949,10 +1052,11 @@ final class CaptureView: NSView {
         }
         if isDocument {
             pointer = next
-            (next == .canvasPoint ? canvasPointCursor() : next.cursor).set()
+            (showBrush ? Self.invisibleCursor : (next == .canvasPoint ? canvasPointCursor() : next.cursor)).set()
             return
         }
-        let shapeChanged = pointer != next || (next == .canvasPoint && pointCursorInk != ink)
+        let shapeChanged = pointer != next || (next == .canvasPoint &&
+            (pointCursorInk != ink || pointCursorDiameter != canvasPointDiameter || pointCursorTextSize != canvasTextSize))
         if shapeChanged {
             pointer = next
             let cursor = next == .canvasPoint ? canvasPointCursor() : next.cursor
@@ -964,18 +1068,50 @@ final class CaptureView: NSView {
             // The system may replace NSCursor.set() after an event. A single
             // pointer drawn in the overlay cannot be overwritten by AppKit.
             systemCursorHidden = CGDisplayHideCursor(CGMainDisplayID()) == .success
-            if !systemCursorHidden { (next == .canvasPoint ? canvasPointCursor() : next.cursor).set() }
+            if !systemCursorHidden { (showBrush ? Self.invisibleCursor : (next == .canvasPoint ? canvasPointCursor() : next.cursor)).set() }
+        }
+        if !systemCursorHidden {
+            (showBrush ? Self.invisibleCursor : (next == .canvasPoint ? canvasPointCursor() : next.cursor)).set()
         }
         if systemCursorHidden {
             pointerView.setFrameOrigin(CGPoint(x: point.x - pointerHotSpot.x, y: point.y - pointerHotSpot.y))
-            pointerView.isHidden = false
+            pointerView.isHidden = showBrush
         }
     }
 
+    private static let invisibleCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
+
+    private var canvasPointDiameter: CGFloat {
+        let width: CGFloat
+        if let index = selectedMark, marks.indices.contains(index), let selectedWidth = marks[index].lineWidth {
+            width = selectedWidth
+        } else if tool == .pen {
+            width = penWidth
+        } else if tool?.usesLineWidth == true {
+            width = shapeWidth
+        } else {
+            return 5
+        }
+        return max(0.1, width * (recognitionView?.imageScale ?? 1))
+    }
+
+    private var canvasTextSize: CGFloat? {
+        guard tool == .text else { return nil }
+        return textSize * (recognitionView?.imageScale ?? 1)
+    }
+
     private func canvasPointCursor() -> NSCursor {
-        if pointCursorInk != ink || cachedPointCursor == nil {
-            cachedPointCursor = Pointer.canvasPointCursor(for: ink)
+        let diameter = canvasPointDiameter
+        let textSize = canvasTextSize
+        if pointCursorInk != ink || pointCursorDiameter != diameter || pointCursorTextSize != textSize || cachedPointCursor == nil {
+            if let textSize {
+                cachedPointCursor = Pointer.textCursor(for: ink, size: textSize)
+            } else {
+                cachedPointCursor = Pointer.canvasPointCursor(for: ink, diameter: diameter)
+            }
             pointCursorInk = ink
+            pointCursorDiameter = diameter
+            pointCursorTextSize = textSize
         }
         return cachedPointCursor!
     }
@@ -1080,7 +1216,7 @@ final class CaptureView: NSView {
         if let index, let updated, updated != marks[index] {
             let now = ProcessInfo.processInfo.systemUptime
             if scrollUndoIndex != index || now - lastScrollUndoTime > 0.6 {
-                undoMarks.append(marks)
+                undoMarks.append(snapshot)
                 redoMarks.removeAll()
             }
             scrollUndoIndex = index
@@ -1099,7 +1235,11 @@ final class CaptureView: NSView {
             syncRecognitionMarkup()
             refresh()
         }
-        showSizeFeedback(title: title, value: value, at: point)
+        if title == .penWidth || title == .wheelMosaicSize || (title == .textSize && selectedMark == nil && tool == .text) {
+            hideSizeFeedback()
+        } else {
+            showSizeFeedback(title: title, value: value, at: point)
+        }
         updatePointer(at: windowPoint)
         return true
     }
@@ -1226,7 +1366,45 @@ final class CaptureView: NSView {
             }
             context.restoreGState()
         }
-        guard !isDocument else { return }
+        if let cropRect, let cropBounds {
+            context.saveGState()
+            let shade = CGMutablePath()
+            shade.addRect(cropBounds)
+            shade.addRect(cropRect)
+            context.addPath(shade)
+            context.setFillColor(NSColor.black.withAlphaComponent(0.52).cgColor)
+            context.drawPath(using: .eoFill)
+            context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+            context.setLineWidth(3)
+            context.stroke(cropRect)
+            context.setStrokeColor(KlikTheme.selection.cgColor)
+            context.setLineWidth(1.5)
+            context.stroke(cropRect)
+            for handle in Selection.Handle.allCases {
+                let center = handle.center(in: cropRect)
+                let dot = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
+                context.setFillColor(KlikTheme.selection.cgColor)
+                context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
+                context.setLineWidth(1)
+                context.fillEllipse(in: dot)
+                context.strokeEllipse(in: dot)
+            }
+            context.restoreGState()
+            return
+        }
+        if isDocument {
+            if active != background.frame {
+                context.saveGState()
+                let mask = CGMutablePath()
+                mask.addRect(background.frame)
+                mask.addRect(active)
+                context.addPath(mask)
+                context.setFillColor(NSColor.black.withAlphaComponent(0.64).cgColor)
+                context.drawPath(using: .eoFill)
+                context.restoreGState()
+            }
+            return
+        }
         context.setStrokeColor(KlikTheme.selectionHalo.cgColor)
         context.setLineWidth(3.5)
         context.stroke(active)
@@ -1249,6 +1427,18 @@ final class CaptureView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard recognitionView == nil, !documentExportInProgress else { return }
         let point = mousePoint(event)
+        if let rect = cropRect, let limit = cropBounds {
+            if let handle = Selection.Handle.hit(at: point, in: rect) {
+                drag = .cropResize(handle, rect, point)
+            } else if rect != limit && rect.contains(point) {
+                drag = .cropMove(rect, point)
+            } else if limit.contains(point) {
+                drag = .cropDraw(point)
+            }
+            dragPoint = point
+            refresh()
+            return
+        }
         if pickingInkColor { applyInkColor(at: point); return }
         if pickingCoverColor { applyCoverColor(at: point); return }
         doubleClickStart = event.clickCount == 2 ? point : nil
@@ -1259,8 +1449,10 @@ final class CaptureView: NSView {
         showMosaicOptions = false
         resetScrollUndo()
         hideSizeFeedback()
+        let wasEditingText = isEditingText
         commitText()
         window?.makeFirstResponder(self)
+        if wasEditingText { refresh(); return }
         errorLabel.isHidden = true
         if event.clickCount == 2, let index = markIndex(at: point), case .text = marks[index] {
             doubleClickStart = nil
@@ -1311,7 +1503,7 @@ final class CaptureView: NSView {
                 }
             }
         } else if !isDocument {
-            let target: ClickTarget = isWindowSnapHeld
+            let target: ClickTarget = isWindowSnapHeld && canSnapToWindow
                 ? .window(WindowSnap.target(at: point, in: windowTargets)) : .display
             drag = .select(point, moved: false, target: target)
             draftSelection = CGRect(origin: point, size: .zero)
@@ -1331,6 +1523,16 @@ final class CaptureView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         guard recognitionView == nil else { return }
+        if isCropping {
+            updateDrag(at: mousePoint(event))
+            if let rect = cropRect, rect.width < Selection.minimum || rect.height < Selection.minimum {
+                cropRect = cropBounds
+            }
+            drag = nil
+            dragPoint = nil
+            refresh()
+            return
+        }
         magnifier.isHidden = true
         defer { dragPoint = nil }
         let point = mousePoint(event)
@@ -1380,7 +1582,7 @@ final class CaptureView: NSView {
         case .moveMark(let index, _, _, let before), .resizeArrow(let index, _, _, _, let before),
              .resizeMark(let index, _, _, _, let before):
             if before.indices.contains(index), marks.indices.contains(index), before[index] != marks[index] {
-                undoMarks.append(before)
+                undoMarks.append(EditSnapshot(marks: before, selection: selection))
                 redoMarks.removeAll()
             }
         default: break
@@ -1480,6 +1682,17 @@ final class CaptureView: NSView {
 
     private func updateDrag(at point: CGPoint, shift: Bool = false) {
         switch drag {
+        case .cropDraw(let start):
+            guard let cropBounds else { return }
+            let end = CGPoint(x: min(max(point.x, cropBounds.minX), cropBounds.maxX),
+                              y: min(max(point.y, cropBounds.minY), cropBounds.maxY))
+            cropRect = Selection.between(start, end)
+        case .cropResize(let handle, let original, let start):
+            guard let cropBounds else { return }
+            cropRect = handle.resize(original, delta: CGPoint(x: point.x - start.x, y: point.y - start.y), in: cropBounds)
+        case .cropMove(let original, let start):
+            guard let cropBounds else { return }
+            cropRect = Selection.move(original, from: start, to: point, in: cropBounds)
         case .select(let start, let moved, let target):
             draftSelection = shift ? desktop.squareSelection(from: start, to: point) : Selection.between(start, point)
             if !moved, max(abs(point.x - start.x), abs(point.y - start.y)) > 3 {
@@ -1569,6 +1782,12 @@ final class CaptureView: NSView {
             toolbarButtons.append(button)
             practiceSteps.append(.init(button: button, detail: item.detail))
         }
+        if isDocument {
+            MarkupToolbarLayout.configureButton(cropButton, symbol: "crop", fallback: "crop",
+                                                label: strings(.toolCrop), target: self, action: #selector(toggleCrop))
+            cropButton.identifier = NSUserInterfaceItemIdentifier("cropButton")
+            toolbarButtons.append(cropButton)
+        }
         practiceSteps.append(.init(button: inkButton, detail: .practiceColor))
         configure(undoButton, ("undo", .toolUndo), action: #selector(undo))
         toolbarButtons.append(undoButton)
@@ -1651,6 +1870,7 @@ final class CaptureView: NSView {
 
     func updateDocumentViewport() {
         updateModeHint()
+        updateCropHint()
     }
 
     private func layoutDocumentToolbar(in host: NSView) {
@@ -1729,7 +1949,7 @@ final class CaptureView: NSView {
         if let index = selectedMark, marks.indices.contains(index), let changed = marks[index].withInk(color), changed != marks[index] {
             let wasMosaic: Bool
             if case .mosaic = marks[index] { wasMosaic = true } else { wasMosaic = false }
-            undoMarks.append(marks)
+            undoMarks.append(snapshot)
             redoMarks.removeAll()
             marks[index] = changed
             resetScrollUndo()
@@ -1763,6 +1983,7 @@ final class CaptureView: NSView {
 
     private func refresh() {
         needsDisplay = true
+        updateCropHint()
         if let host = documentToolbarHost {
             layoutDocumentToolbar(in: host)
         } else if let selection, !isDocument, drag == nil {
@@ -1800,8 +2021,16 @@ final class CaptureView: NSView {
             palette.isHidden = true
             mosaicOptions.isHidden = true
         }
-        undoButton.isEnabled = !documentExportInProgress && (!undoMarks.isEmpty || isEditingText)
-        redoButton.isEnabled = !documentExportInProgress && !redoMarks.isEmpty && !isEditingText
+        for button in toolbarButtons {
+            if isCropping {
+                button.isEnabled = button === cropButton || button.action == #selector(cancel) || button.action == #selector(confirm)
+            } else if !documentExportInProgress {
+                button.isEnabled = true
+            }
+        }
+        inkButton.isEnabled = !isCropping && !documentExportInProgress
+        undoButton.isEnabled = !isCropping && !documentExportInProgress && (!undoMarks.isEmpty || isEditingText)
+        redoButton.isEnabled = !isCropping && !documentExportInProgress && !redoMarks.isEmpty && !isEditingText
         if let coach {
             if drag != nil || isEditingText || windowCaptureTask != nil || !errorLabel.isHidden {
                 coach.hide()
@@ -1815,6 +2044,15 @@ final class CaptureView: NSView {
         }
         updateModeHint()
         updateSelectionSize()
+    }
+
+    private func updateCropHint() {
+        cropHint.isHidden = !isCropping
+        guard isCropping else { return }
+        let area = isDocument ? visibleRect : bounds
+        let size = cropHint.size(maximumWidth: max(1, area.width - 16))
+        cropHint.frame = CGRect(x: area.midX - size.width / 2, y: area.minY + 10,
+                                width: size.width, height: size.height)
     }
 
     private func updateSelectionSize() {
@@ -1846,6 +2084,7 @@ final class CaptureView: NSView {
     }
 
     @objc private func pickTool(_ sender: NSButton) {
+        if isCropping { cancelCrop() }
         guard !pickingCoverColor else { updateModeHint(); return }
         guard drag == nil else { return }
         pickingCoverColor = false
@@ -1880,22 +2119,53 @@ final class CaptureView: NSView {
         }
     }
 
+    @objc private func toggleCrop() {
+        if isCropping { applyCrop(); return }
+        guard !documentExportInProgress, !pickingCoverColor, !pickingInkColor,
+              drag == nil, let selection else { return }
+        commitText()
+        choose(nil)
+        selectedMark = nil
+        showPalette = false
+        showMosaicOptions = false
+        cropBounds = selection
+        cropRect = selection
+        cropButton.toolSelected = true
+        refresh()
+    }
+
+    func applyCrop() {
+        guard let cropRect, let original = cropBounds else { return }
+        if cropRect != original {
+            undoMarks.append(snapshot)
+            redoMarks.removeAll()
+            selection = cropRect
+            background.clearSampleCache()
+        }
+        self.cropRect = nil
+        cropBounds = nil
+        cropButton.toolSelected = false
+        drag = nil
+        refresh()
+    }
+
+    func cancelCrop() {
+        guard isCropping else { return }
+        cropRect = nil
+        cropBounds = nil
+        cropButton.toolSelected = false
+        drag = nil
+        refresh()
+    }
+
     private func beginText(at point: CGPoint, in selection: CGRect, existing: String? = nil, size: CGFloat? = nil) {
         let area = isDocument ? selection.intersection(visibleRect) : selection
-        let x = min(max(area.minX, point.x - (existing == nil ? 0 : 3)), max(area.minX, area.maxX - 52))
-        let y = min(max(area.minY, point.y - (existing == nil ? 0 : 2)), max(area.minY, area.maxY - 24))
-        textOrigin = CGPoint(x: x + 3, y: y + 2)
-        let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, area.maxX - x)), height: 26))
+        let x = min(max(area.minX, point.x), max(area.minX, area.maxX - 24))
+        let y = min(max(area.minY, point.y), max(area.minY, area.maxY - 24))
+        textOrigin = CGPoint(x: x, y: y)
         let currentSize = size ?? textSize
-        field.font = MarkupTextStyle.font(size: currentSize)
-        field.frame.size.height = max(26, currentSize * 1.4)
-        field.stringValue = existing ?? ""
-        field.placeholderString = strings(.textPlaceholder)
-        field.isBezeled = true
-        field.bezelStyle = .roundedBezel
-        KlikTheme.styleMarkupField(field)
-        field.usesSingleLineMode = true
-        field.lineBreakMode = .byClipping
+        let field = InlineMarkupTextView(origin: textOrigin, maximumWidth: area.maxX - x,
+                                         ink: ink, size: currentSize, text: existing ?? "")
         addSubview(field, positioned: .below, relativeTo: pointerView)
         textField = field
         window?.makeFirstResponder(field)
@@ -1910,7 +2180,7 @@ final class CaptureView: NSView {
         textSize = size
         updateSwatches()
         if let recognitionView {
-            recognitionView.beginMarkupText(at: origin, size: size, existing: value)
+            recognitionView.beginMarkupText(at: origin, size: size, ink: color, existing: value)
             syncRecognitionMarkup()
         } else {
             beginText(at: origin, in: selection, existing: value, size: size)
@@ -1924,7 +2194,7 @@ final class CaptureView: NSView {
             guard marks.indices.contains(editing.index), case .text(_, let oldOrigin, let oldInk, let size) = editing.original else { return }
             let replacement = Mark.text(value, oldOrigin, oldInk, size: size)
             if !nonempty || replacement != editing.original {
-                undoMarks.append(marks)
+                undoMarks.append(snapshot)
                 redoMarks.removeAll()
                 if nonempty { marks[editing.index] = replacement; selectedMark = editing.index }
                 else { marks.remove(at: editing.index); selectedMark = nil }
@@ -1937,7 +2207,7 @@ final class CaptureView: NSView {
 
     private func commitText() {
         guard let field = textField else { return }
-        let value = field.stringValue
+        let value = field.string
         textField = nil
         field.removeFromSuperview()
         window?.makeFirstResponder(self)
@@ -1972,8 +2242,21 @@ final class CaptureView: NSView {
         refresh()
     }
 
+    func cancelActiveTextEditing() {
+        guard isEditingText || isEditingRecognitionMarkup else { return }
+        let previousIndex = editingTextMark?.index
+        editingTextMark = nil
+        textField?.removeFromSuperview()
+        textField = nil
+        recognitionView?.cancelMarkupText()
+        if let previousIndex, marks.indices.contains(previousIndex) { selectedMark = previousIndex }
+        window?.makeFirstResponder(self)
+        refresh()
+        syncRecognitionMarkup()
+    }
+
     private func addMark(_ mark: Mark) {
-        undoMarks.append(marks)
+        undoMarks.append(snapshot)
         marks.append(mark)
         redoMarks.removeAll()
         selectedMark = nil
@@ -1984,7 +2267,7 @@ final class CaptureView: NSView {
         guard drag == nil, !pickingCoverColor, !pickingInkColor, !documentExportInProgress,
               let index = selectedMark, marks.indices.contains(index) else { return false }
         let removed = marks[index]
-        undoMarks.append(marks)
+        undoMarks.append(snapshot)
         marks.remove(at: index)
         redoMarks.removeAll()
         selectedMark = nil
@@ -1999,10 +2282,12 @@ final class CaptureView: NSView {
 
     @objc func undo() {
         guard !documentExportInProgress else { return }
+        if isCropping { cancelCrop(); return }
         commitText()
         if let prior = undoMarks.popLast() {
-            redoMarks.append(marks)
-            marks = prior
+            redoMarks.append(snapshot)
+            marks = prior.marks
+            selection = prior.selection
             selectedMark = nil
             resetScrollUndo()
             pickingCoverColor = hasPendingCover
@@ -2011,10 +2296,11 @@ final class CaptureView: NSView {
     }
 
     @objc func redo() {
-        guard !isEditingText, !documentExportInProgress else { return }
+        guard !isCropping, !isEditingText, !documentExportInProgress else { return }
         if let next = redoMarks.popLast() {
-            undoMarks.append(marks)
-            marks = next
+            undoMarks.append(snapshot)
+            marks = next.marks
+            selection = next.selection
             selectedMark = nil
             resetScrollUndo()
             pickingCoverColor = hasPendingCover
@@ -2029,12 +2315,13 @@ final class CaptureView: NSView {
     }
 
     @objc func cancel() {
+        if isCropping { cancelCrop(); return }
         guard !exportCommitted else { return }
         cancelExport()
         finish(.cancelled)
     }
     @objc private func download() { export(.downloads) }
-    @objc private func confirm() { export(.clipboard) }
+    @objc private func confirm() { if isCropping { applyCrop() } else { export(.clipboard) } }
 
     @objc private func beginScrollCapture() {
         guard !pickingCoverColor, !pickingInkColor, drag == nil, windowCaptureTask == nil,
@@ -2208,7 +2495,7 @@ final class CaptureView: NSView {
                 if let candidate { pendingMarkSelection = (candidate, point) }
             switch tool {
             case .text:
-                recognitionView?.beginMarkupText(at: point, size: textSize)
+                recognitionView?.beginMarkupText(at: point, size: textSize, ink: ink)
             case .some(let chosen):
                 if chosen == .mosaic {
                     ocrRefreshWork?.cancel()
@@ -2264,7 +2551,7 @@ final class CaptureView: NSView {
         case .moveMark(let index, _, _, let before), .resizeArrow(let index, _, _, _, let before),
              .resizeMark(let index, _, _, _, let before):
             if before.indices.contains(index), marks.indices.contains(index), before[index] != marks[index] {
-                undoMarks.append(before)
+                undoMarks.append(EditSnapshot(marks: before, selection: selection))
                 redoMarks.removeAll()
                 if case .mosaic = marks[index] { refreshOCR = true }
             }
@@ -2346,7 +2633,7 @@ final class CaptureView: NSView {
               case .mosaic(let points, let diameter, _, _) = marks[index] else { return }
         // Pending stripes are excluded from both the preview and the chosen color.
         guard let color = colorForEyedropper(at: point) else { return }
-        undoMarks.append(marks)
+        undoMarks.append(snapshot)
         redoMarks.removeAll()
         marks[index] = .mosaic(points, diameter: diameter, style: .manual, color: color)
         pickingCoverColor = false
@@ -2432,6 +2719,11 @@ final class CaptureView: NSView {
     func saveImageFromTextRecognition() {
         recognitionView?.commitMarkupText()
         export(.downloads)
+    }
+
+    func copyImageFromTextRecognition() {
+        recognitionView?.commitMarkupText()
+        export(.clipboard)
     }
 
     func export(_ destination: Destination) {

@@ -7,7 +7,7 @@ final class RecognitionImageView: NSView {
     private let imageSize: CGSize
     private var image: NSImage
     private var selectedPoints: [CGPoint] = []
-    private var input: NSTextField?
+    private var input: InlineMarkupTextView?
     private var inputOrigin = CGPoint.zero
     var onDown: ((CGPoint, Int) -> Void)?
     var onDrag: ((CGPoint, NSEvent.ModifierFlags) -> Void)?
@@ -73,7 +73,9 @@ final class RecognitionImageView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let wasEditingText = isEditingMarkupText
         commitText()
+        if wasEditingText { return }
         let point = convert(event.locationInWindow, from: nil)
         guard let point = capturePoint(for: point) else { return }
         window?.makeFirstResponder(self)
@@ -86,22 +88,15 @@ final class RecognitionImageView: NSView {
         if let point = capturePoint(for: convert(event.locationInWindow, from: nil), clamp: true) { onUp?(point, event.modifierFlags) }
     }
 
-    func beginText(at point: CGPoint, placeholder: String, size: CGFloat, existing: String? = nil) {
+    func beginText(at point: CGPoint, size: CGFloat, ink: Ink, existing: String? = nil) {
         commitText()
         let position = displayPoint(for: point)
-        let offset: CGFloat = existing == nil ? 0 : 3
-        let x = min(max(imageRect.minX, position.x - offset), max(imageRect.minX, imageRect.maxX - 52))
-        let y = min(max(imageRect.minY, position.y - (existing == nil ? 0 : 2)), max(imageRect.minY, imageRect.maxY - 24))
-        inputOrigin = capturePoint(for: CGPoint(x: x + 3, y: y + 2), clamp: true) ?? point
+        let x = min(max(imageRect.minX, position.x), max(imageRect.minX, imageRect.maxX - 24))
+        let y = min(max(imageRect.minY, position.y), max(imageRect.minY, imageRect.maxY - 24))
+        inputOrigin = capturePoint(for: CGPoint(x: x, y: y), clamp: true) ?? point
         let displaySize = size * imageScale
-        let field = NSTextField(frame: CGRect(x: x, y: y, width: min(280, max(52, imageRect.maxX - x)), height: max(26, displaySize * 1.4)))
-        field.font = MarkupTextStyle.font(size: displaySize)
-        field.placeholderString = placeholder
-        field.stringValue = existing ?? ""
-        field.isBezeled = true
-        field.bezelStyle = .roundedBezel
-        KlikTheme.styleMarkupField(field)
-        field.usesSingleLineMode = true
+        let field = InlineMarkupTextView(origin: CGPoint(x: x, y: y), maximumWidth: imageRect.maxX - x,
+                                         ink: ink, size: displaySize, text: existing ?? "")
         addSubview(field)
         input = field
         window?.makeFirstResponder(field)
@@ -111,15 +106,19 @@ final class RecognitionImageView: NSView {
         guard let input else { return }
         let displaySize = size * imageScale
         input.font = MarkupTextStyle.font(size: displaySize)
-        input.frame.size.height = max(26, displaySize * 1.4)
     }
 
     func commitText() {
         guard let field = input else { return }
-        let text = field.stringValue
+        let text = field.string
         input = nil
         field.removeFromSuperview()
         window?.makeFirstResponder(self)
         onTextCommit?(text, inputOrigin)
+    }
+
+    func cancelText() {
+        input?.removeFromSuperview()
+        input = nil
     }
 }

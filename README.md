@@ -50,7 +50,7 @@ I love how easy it is to take a screenshot in WeChat. But confirming one always 
 
 Want to capture a partly covered window? Hold **Space**, point to any visible part, and click to select the full window. A magnifier appears as you drag or adjust a selection, so you can line up the edges. With no annotation tool selected, move the pointer inside the selection and drag to reposition it. If you have multiple displays, move the pointer to the display you want to capture.
 
-Click a box, arrow, text, or pen mark to show its outline or handles, then drag it to move it. Drawing near an unselected mark creates a new mark. Double-click text to edit it; select an annotation and choose a color to change it. Scroll over the capture to adjust the active tool’s stroke width or text size. Select an existing mark first to adjust that mark. In a scrolling screenshot preview, hold **Option** while scrolling to adjust; scroll normally to browse. You can resize a box using its handles or adjust an arrow by dragging an endpoint, or bend it by dragging its middle handle. When adding text, press **Enter** once to finish editing and again to copy the screenshot.
+Click a box, arrow, text, or pen mark to show its outline or handles, then drag it to move it. Drawing near an unselected mark creates a new mark. Double-click text to edit it; select an annotation and choose a color to change it. Scroll over the capture to adjust the active tool’s stroke width or text size. Select an existing mark first to adjust that mark. In a scrolling screenshot preview, hold **Option** while scrolling to adjust; scroll normally to browse. You can resize a box using its handles or adjust an arrow by dragging an endpoint, or bend it by dragging its middle handle. When adding a text annotation, press **Shift Enter** for a new line, **Enter** to finish editing, and **Enter** again to copy the screenshot.
 
 ![Klik. adding a rectangle and text to a webpage screenshot, with the annotation toolbar visible.](docs/klik-markup-demo.png)
 
@@ -64,7 +64,8 @@ To move or remove a cover stroke, click it to select it, then drag it or press *
 
 1. Frame the part of the page or app that scrolls, then click **Scrolling Screenshot** in the toolbar.
 2. Scroll inside the selection at a steady pace. The first detected movement sets the axis. You can scroll up and down or left and right, including reversing direction on that axis.
-3. Click **Done** to review the stitched image. Scroll through it and add any markup you need. Press **Enter** or click **✓** to copy it, or use **↓** to save a PNG at its full stitched resolution.
+3. If there’s more to capture outside the selection at the top or bottom of a vertical scroll, click **Extend** when it appears. Scroll to move the selection toward that edge, then click the green **✓** or press **Enter** to preview. Click **Done** to preview without extending.
+4. Scroll to browse the preview, or hold **Command** and scroll over the image to zoom. Use **Crop** to adjust the final area. Enter applies it, Esc cancels it, and Undo restores the earlier area. Press **Enter** or click **✓** to copy the image, or use **↓** to save a PNG at its full resolution.
 
 ![Klik. previewing a stitched Wikipedia page with the annotation toolbar visible.](docs/klik-scrolling-demo.png)
 
@@ -78,7 +79,7 @@ Select an area and choose **Recognize Text**. Klik. uses Apple’s Vision framew
 
 Klik. recognizes text from the selected image and its annotations. If you add or undo mosaic, unedited results refresh automatically. If you’ve edited the text, Klik. keeps your changes and warns that they may still include covered content. The refresh button asks before replacing your edits. Check the text before sharing, especially after covering information or when working with formulas and tables.
 
-In the OCR view, **Copy Text** keeps the editor open. The download button or **Enter** saves the image; while editing text, **Enter** inserts a line and **⌘Enter** saves the image.
+In the OCR view, **Copy Text** keeps the editor open. The download button saves the image, while **Enter** copies it. In the recognized-text editor, **Enter** inserts a line and **⌘Enter** copies the image. Image annotations use **Enter** to finish and **Shift Enter** for a new line.
 
 Before sharing sensitive information, please check the finished image. Pixelation and blur may not fully conceal the original content; a solid cover is the clearer option.
 
@@ -107,7 +108,7 @@ https://github.com/TerryZheng233/Klik./releases/latest
 
 ### If macOS blocks Klik.
 
-The GitHub release is ad hoc signed and **has not yet been notarized by Apple**, so macOS may say it cannot verify that Klik. is free of malware. If you downloaded Klik. from this repository, are confident it has not been altered, and decide to open it:
+Starting with 0.1.23, the GitHub release uses a fixed signing certificate and **has not been notarized by Apple**, so macOS may say it cannot verify that Klik. is free of malware. If you downloaded Klik. from this repository, are confident it has not been altered, and decide to open it:
 
 1. Dismiss the warning, then open **System Settings → Privacy & Security**.
 2. Scroll down to **Security** and find the message that Klik.app was blocked. Click **Open Anyway**, then follow the system prompts. You may need your Mac password or Touch ID.
@@ -127,7 +128,7 @@ Find your recent screenshots under **k.** in the menu bar. They’re stored on y
 
 ![Klik. showing the recent screenshots menu with image thumbnails.](docs/klik-history-demo.png)
 
-In settings, you can also have Klik. open at login and check for updates. When a new version is available, you can install it there and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing. GitHub releases use ad hoc app signing, so macOS may request screen recording permission again after an update.
+In settings, you can also have Klik. open at login and check for updates. When a new version is available, you can install it there and restart Klik. Starting with 0.1.19, Klik. verifies an independent update signature before installing. Moving from an earlier GitHub release to the fixed signing identity in 0.1.23 may require granting Screen Recording permission again.
 
 You can also change your shortcut in settings, or choose **Follow System**, **English**, or **简体中文** under **Language**. The olive-and-cream palette runs through the app, including the guide, settings, and capture tools. The guide, settings, and scrolling capture prompt follow your Mac’s light or dark appearance.
 
@@ -147,7 +148,7 @@ open -g .build/Klik.app
 
 If iCloud Drive or another sync service adds Finder metadata that breaks signature verification, pass an unsynced output directory to `./build-app.sh`, such as `./build-app.sh "$(mktemp -d /tmp/klik-build.XXXXXX)"`.
 
-The GitHub DMG is ad hoc signed and hasn’t been notarized. macOS may block it on first launch or ask for screen recording access again after an update. For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Using the same identity for local updates helps retain the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+For local builds, the script uses the **Apple Development** identity if there’s exactly one in Keychain. Set `KLIK_SIGN_IDENTITY` to pick one yourself. Using the same identity for local updates helps retain the existing permission. [Apple code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
 
 To make a drag-to-install DMG, use [dmgbuild](https://pypi.org/project/dmgbuild/1.6.7/).
 

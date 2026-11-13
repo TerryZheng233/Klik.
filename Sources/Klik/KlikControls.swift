@@ -74,7 +74,8 @@ final class ForestSliderCell: NSSliderCell {
 
     override func drawKnob(_ knobRect: NSRect) {
         let side = min(knobRect.width, knobRect.height, 14)
-        let disc = NSBezierPath(ovalIn: CGRect(x: knobRect.midX - side / 2, y: knobRect.midY - side / 2,
+        let trackMidY = barRect(flipped: controlView?.isFlipped ?? false).midY
+        let disc = NSBezierPath(ovalIn: CGRect(x: knobRect.midX - side / 2, y: trackMidY - side / 2,
                                              width: side, height: side))
         KlikTheme.action.setFill()
         disc.fill()

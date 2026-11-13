@@ -8,6 +8,36 @@ final class ScrollStitcherTests: XCTestCase {
     private let width = 180
     private let viewportHeight = 240
 
+    func testBottomCompletionRequiresMatchingFrontierAndAppendsOnlySelectedRows() throws {
+        let document = try page(height: 900)
+        let expanded = try crop(document, y: 71, height: viewportHeight + 110)
+        var stitcher = ScrollStitcher()
+        XCTAssertEqual(stitcher.append(try crop(document, y: 0, height: viewportHeight)), .waiting)
+        XCTAssertEqual(stitcher.append(try crop(document, y: 71, height: viewportHeight)), .extended)
+        XCTAssertEqual(stitcher.availableRows(at: .bottom, from: expanded), 110)
+        XCTAssertEqual(stitcher.extendEdge(.bottom, from: try crop(document, y: 83, height: viewportHeight + 110), extraRows: 85), .unaligned)
+        XCTAssertEqual(stitcher.append(try crop(document, y: 20, height: viewportHeight)), .waiting)
+        XCTAssertEqual(stitcher.extendEdge(.bottom, from: expanded, extraRows: 85), .unaligned)
+        XCTAssertEqual(stitcher.append(try crop(document, y: 71, height: viewportHeight)), .waiting)
+        XCTAssertEqual(stitcher.extendEdge(.bottom, from: expanded, extraRows: 85), .extended)
+        let expected = try crop(document, y: 0, height: viewportHeight + 71 + 85)
+        XCTAssertEqual(CaptureImage.png(try XCTUnwrap(stitcher.render())), CaptureImage.png(expected))
+    }
+
+    func testTopCompletionPrependsOnlySelectedRowsInOrder() throws {
+        let document = try page(height: 900)
+        let expanded = try crop(document, y: 0, height: viewportHeight + 100)
+        var stitcher = ScrollStitcher()
+        XCTAssertEqual(stitcher.append(try crop(document, y: 171, height: viewportHeight)), .waiting)
+        XCTAssertEqual(stitcher.append(try crop(document, y: 100, height: viewportHeight)), .extended)
+        XCTAssertEqual(stitcher.availableRows(at: .top, from: expanded), 100)
+        let misaligned = try crop(document, y: 8, height: viewportHeight + 100)
+        XCTAssertEqual(stitcher.extendEdge(.top, from: misaligned, extraRows: 65), .unaligned)
+        XCTAssertEqual(stitcher.extendEdge(.top, from: expanded, extraRows: 65), .extended)
+        let expected = try crop(document, y: 35, height: viewportHeight + 71 + 65)
+        XCTAssertEqual(CaptureImage.png(try XCTUnwrap(stitcher.render())), CaptureImage.png(expected))
+    }
+
     func testStitchesAtOriginalResolutionWithAnExactFinalOffset() throws {
         let document = try page(height: 900)
         var stitcher = ScrollStitcher()
@@ -171,16 +201,100 @@ final class ScrollStitcherTests: XCTestCase {
 
     @MainActor
     func testScrollSessionEnablesDoneAndOpensFullSizePreview() async throws {
+        try await checkScrollSessionPreview(extending: nil)
+    }
+
+    @MainActor
+    func testScrollSessionCanMoveBottomSelectionAndConfirmWithEnter() async throws {
+        try await checkScrollSessionPreview(extending: .bottom, confirmWithEnter: true)
+    }
+
+    @MainActor
+    func testScrollSessionCanConfirmWithCheckOnMovingSelectionEdge() async throws {
+        try await checkScrollSessionPreview(extending: .bottom)
+    }
+
+    @MainActor
+    func testScrollSessionCanExtendUpAndConfirmOnTopEdge() async throws {
+        try await checkScrollSessionPreview(extending: .top)
+    }
+
+    @MainActor
+    func testInterruptedScrollKeepsAlreadyMatchedPendingRows() async throws {
         _ = NSApplication.shared
         let document = try page(height: 900)
         let first = try crop(document, y: 0, height: viewportHeight)
         let second = try crop(document, y: 71, height: viewportHeight)
+        let pending = try crop(document, y: 77, height: viewportHeight)
+        var stitcher = ScrollStitcher()
+        XCTAssertEqual(stitcher.append(first), .waiting)
+        XCTAssertEqual(stitcher.append(second), .extended)
+        XCTAssertEqual(stitcher.append(pending), .waiting)
+        XCTAssertEqual(stitcher.append(pending, final: true), .extended)
+        let expected = try XCTUnwrap(stitcher.render()).height
+        XCTAssertEqual(expected, viewportHeight + 77)
+
         let source = FixtureScrollSource([first, second])
         let strings = AppStrings(language: .english)
         let screen = CGRect(x: -3000, y: -3000, width: 1000, height: 800)
         let existing = Set(NSApp.windows.map(\.windowNumber))
         let session = ScrollCaptureSession(
             selection: CGRect(x: 100, y: 100, width: width, height: viewportHeight),
+            screenFrame: screen, visibleFrame: screen, strings: strings,
+            record: { _ in XCTFail("Preview should not write history") }, finish: {})
+        defer { session.close() }
+        func views(in view: NSView) -> [NSView] { [view] + view.subviews.flatMap { views(in: $0) } }
+        func visibleViews() -> [NSView] {
+            NSApp.windows.filter { $0.isVisible && !existing.contains($0.windowNumber) }
+                .compactMap(\.contentView).flatMap { views(in: $0) }
+        }
+
+        session.start { _ in source }
+        let done = try XCTUnwrap(visibleViews().compactMap { $0 as? NSButton }
+            .first { $0.accessibilityIdentifier() == "scrollDone" })
+        for _ in 0..<200 where !done.isEnabled { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertTrue(done.isEnabled)
+        source.send(pending)
+        source.fail()
+        for _ in 0..<200 where !visibleViews().compactMap({ $0 as? NSTextField })
+            .contains(where: { $0.stringValue == strings(.scrollSourceFailed) }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(visibleViews().compactMap { $0 as? NSTextField }
+            .contains { $0.stringValue == strings(.scrollSourceFailed) })
+        done.performClick(nil)
+        for _ in 0..<200 where !visibleViews().contains(where: { $0.identifier?.rawValue == "scrollPreviewSurface" }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let preview = try XCTUnwrap(visibleViews().first { $0.identifier?.rawValue == "scrollPreviewSurface" })
+        let window = try XCTUnwrap(preview.window as? ScrollCapturePreview)
+        var exported: CGImage?
+        window.onExport = { _, image in exported = image }
+        let save = try XCTUnwrap(views(in: preview).compactMap { $0 as? NSButton }
+            .first { $0.toolTip == strings(.toolDownload) })
+        save.performClick(nil)
+        let image = try XCTUnwrap(exported)
+        XCTAssertEqual(image.height, expected)
+        XCTAssertEqual(CaptureImage.png(image), CaptureImage.png(try crop(document, y: 0, height: expected)))
+    }
+
+    @MainActor
+    private func checkScrollSessionPreview(extending edge: ScrollVerticalEdge?, confirmWithEnter: Bool = false) async throws {
+        _ = NSApplication.shared
+        let document = try page(height: 900)
+        let upward = edge == .top
+        let direction = upward ? 1 : -1
+        let selectionTop: CGFloat = upward ? 140 : 100
+        let edgeOrigin = upward ? 100 : 71
+        let first = try crop(document, y: edgeOrigin + direction * 71, height: viewportHeight)
+        let second = try crop(document, y: edgeOrigin, height: viewportHeight)
+        let expanded = try crop(document, y: upward ? 0 : edgeOrigin, height: viewportHeight + 100)
+        let source = FixtureScrollSource([first, second], extensionFrame: expanded)
+        let strings = AppStrings(language: .english)
+        let screen = CGRect(x: -3000, y: -3000, width: 1000, height: 800)
+        let existing = Set(NSApp.windows.map(\.windowNumber))
+        let session = ScrollCaptureSession(
+            selection: CGRect(x: 100, y: selectionTop, width: CGFloat(width), height: CGFloat(viewportHeight)),
             screenFrame: screen, visibleFrame: screen, strings: strings,
             record: { _ in XCTFail("Preview should not write history") },
             finish: { XCTFail("Completing capture should open a preview") }
@@ -205,14 +319,103 @@ final class ScrollStitcherTests: XCTestCase {
         session.start { _ in source }
         let controls = try XCTUnwrap(visibleSurface("scrollControlSurface"))
         let done = try XCTUnwrap(views(in: controls).compactMap { $0 as? NSButton }
-            .first { $0.title == strings(.done) })
+            .first { $0.accessibilityIdentifier() == "scrollDone" })
+        let status = try XCTUnwrap(views(in: controls).compactMap { $0 as? NSTextField }.first)
         XCTAssertFalse(done.isEnabled)
         _ = try await wait { done.isEnabled ? true : nil }
-        done.performClick(nil)
+        if let edge {
+            func extendButton() -> NSButton? {
+                NSApp.windows.lazy.filter { $0.isVisible && !existing.contains($0.windowNumber) }
+                    .compactMap(\.contentView).flatMap { views(in: $0) }
+                    .compactMap { $0 as? NSButton }
+                    .first { $0.accessibilityIdentifier() == "scrollExtend" }
+            }
+            let insideSelection = CGPoint(x: screen.minX + 150, y: screen.maxY - selectionTop - 50)
+            try await Task.sleep(for: .milliseconds(200))
+            XCTAssertNil(extendButton(), "A pause alone must not show completion")
+            let progressFrame = try XCTUnwrap(controls.window?.frame)
+            let doneFrame = done.frame
+            session.observeVerticalScroll(CGFloat(direction * 20), at: insideSelection)
+            let bottom = try await wait(for: extendButton)
+            let pulseKey = "klik.extendAttention"
+            let pulseStart = bottom.layer?.animation(forKey: pulseKey)?.beginTime
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                XCTAssertNil(pulseStart)
+            } else {
+                XCTAssertNotNil(pulseStart)
+            }
+            XCTAssertEqual(bottom.title, "Extend")
+            let reached = edge == .top ? UIKey.scrollTopReached : .scrollBottomReached
+            XCTAssertEqual(bottom.accessibilityLabel(), strings(edge == .top ? .scrollTopStart : .scrollBottomStart))
+            XCTAssertEqual(status.stringValue, strings(reached))
+            XCTAssertEqual(controls.window?.frame, progressFrame)
+            XCTAssertEqual(done.frame, doneFrame)
+            XCTAssertEqual(done.toolTip, strings(.done))
+            let doneIcon = try XCTUnwrap(done.image)
+            let extendFrame = try XCTUnwrap(bottom.window?.frame)
+            XCTAssertEqual(extendFrame.midX, screen.minX + 100 + CGFloat(width) / 2, accuracy: 0.5)
+            XCTAssertEqual(extendFrame.midY, screen.maxY - selectionTop - (upward ? 0 : CGFloat(viewportHeight)))
+            let bitmap = try XCTUnwrap(bottom.bitmapImageRepForCachingDisplay(in: bottom.bounds))
+            bottom.cacheDisplay(in: bottom.bounds, to: bitmap)
+            XCTAssertLessThan(try XCTUnwrap(bitmap.colorAt(x: 1, y: 1)).alphaComponent, 0.1)
+            XCTAssertGreaterThan(try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: 4)).alphaComponent, 0.9)
+            session.observeVerticalScroll(CGFloat(-direction * 2), at: insideSelection)
+            source.send(try crop(document, y: edgeOrigin + direction * 10, height: viewportHeight))
+            try await Task.sleep(for: .milliseconds(220))
+            XCTAssertTrue(extendButton() === bottom, "A small bounce at the end keeps Extend visible")
+            let awayFromEdge = try crop(document, y: edgeOrigin + direction * 26, height: viewportHeight)
+            source.send(awayFromEdge)
+            try await Task.sleep(for: .milliseconds(80))
+            XCTAssertTrue(extendButton() === bottom, "A brief excursion does not hide Extend")
+            source.send(second)
+            try await Task.sleep(for: .milliseconds(220))
+            XCTAssertTrue(extendButton() === bottom, "Returning to the edge cancels hiding")
+            try await Task.sleep(for: .milliseconds(150))
+            XCTAssertEqual(status.stringValue, strings(reached))
+            XCTAssertEqual(bottom.window?.frame, extendFrame)
+            if let activePulse = bottom.layer?.animation(forKey: pulseKey) {
+                XCTAssertEqual(activePulse.beginTime, pulseStart, "Further scrolling must not restart the pulse")
+            }
+            source.send(awayFromEdge)
+            _ = try await wait { extendButton() == nil ? true : nil }
+            XCTAssertEqual(status.stringValue, strings(.scrollProgress, viewportHeight + 71))
+            source.send(second)
+            try await Task.sleep(for: .milliseconds(150))
+            session.observeVerticalScroll(CGFloat(direction * 20), at: insideSelection)
+            _ = try await wait(for: extendButton)
+            bottom.performClick(nil)
+            let selection = try await wait { visibleSurface("scrollExtensionSelection") }
+            XCTAssertTrue(extendButton() === bottom)
+            XCTAssertNil(bottom.layer?.animation(forKey: pulseKey))
+            XCTAssertTrue(bottom.title.isEmpty)
+            XCTAssertEqual(bottom.accessibilityLabel(), strings(.scrollBottomApply))
+            XCTAssertEqual(status.stringValue, strings(.scrollBottomInstructions))
+            XCTAssertEqual(controls.window?.frame, progressFrame)
+            XCTAssertEqual(done.frame, doneFrame)
+            XCTAssertEqual(done.toolTip, strings(.scrollBottomApply))
+            XCTAssertTrue(done.image === doneIcon)
+            XCTAssertEqual(source.capturedEdge, edge)
+            let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1,
+                                              wheel1: Int32(direction * 100), wheel2: 0, wheel3: 0))
+            selection.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: wheel)))
+            XCTAssertEqual(controls.window?.frame, progressFrame)
+            XCTAssertEqual(try XCTUnwrap(bottom.window?.frame.midY), extendFrame.midY + CGFloat(direction * 100),
+                           accuracy: 0.5)
+            if confirmWithEnter {
+                let enter = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                    timestamp: 0, windowNumber: selection.window?.windowNumber ?? 0, context: nil,
+                    characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+                selection.window?.sendEvent(enter)
+            } else {
+                bottom.performClick(nil)
+            }
+        } else {
+            done.performClick(nil)
+        }
         let preview = try await wait { visibleSurface("scrollPreviewSurface") }
         XCTAssertNil(visibleSurface("scrollControlSurface"))
         XCTAssertTrue(views(in: preview).compactMap { $0 as? NSTextField }
-            .contains { $0.stringValue == strings(.scrollDimensions, width, viewportHeight + 71) })
+            .contains { $0.stringValue == strings(.scrollDimensions, width, viewportHeight + 71 + (edge == nil ? 0 : 100)) })
     }
 
     private func crop(_ document: CGImage, y: Int, height: Int) throws -> CGImage {
@@ -244,15 +447,26 @@ private final class FixtureScrollSource: ScrollCaptureFrameSource {
     let frames: AsyncThrowingStream<CGImage, Error>
     private let continuation: AsyncThrowingStream<CGImage, Error>.Continuation
     private let images: [CGImage]
+    private let extensionFrame: CGImage?
+    private(set) var capturedEdge: ScrollVerticalEdge?
 
-    init(_ images: [CGImage]) {
+    init(_ images: [CGImage], extensionFrame: CGImage? = nil) {
         (frames, continuation) = AsyncThrowingStream<CGImage, Error>.makeStream()
         self.images = images
+        self.extensionFrame = extensionFrame
+    }
+
+    func captureEdge(_ edge: ScrollVerticalEdge, through displayY: CGFloat) async throws -> CGImage? {
+        capturedEdge = edge
+        return extensionFrame
     }
 
     func start() async throws {
         for image in images { continuation.yield(image) }
     }
+
+    func send(_ image: CGImage) { continuation.yield(image) }
+    func fail() { continuation.finish(throwing: CocoaError(.fileReadUnknown)) }
 
     func finishFrames() { continuation.finish() }
     func stop() async { finishFrames() }

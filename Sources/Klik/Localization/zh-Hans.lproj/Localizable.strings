@@ -52,6 +52,8 @@
 "toolDownload" = "下载 PNG";
 "toolCancel" = "取消（Esc）";
 "toolConfirm" = "复制并完成（Enter）";
+"toolCrop" = "裁剪图片";
+"cropHint" = "拖动裁剪 · Enter 确认 · Esc 取消";
 "inkPicker" = "标注颜色（%@）";
 "inkRed" = "红色";
 "inkOrange" = "橙色";
@@ -142,10 +144,10 @@
 "ocrCopy" = "复制文字";
 "practiceRecognizeText" = "识别并复制选区中的文字。";
 "ocrSaveImage" = "保存图片";
-"ocrSaveImageHint" = "保存 PNG（Enter；编辑文字时按 ⌘Enter）";
+"ocrSaveImageHint" = "保存 PNG";
 
 "ocrCancel" = "取消截图（Esc）";
-"ocrConfirm" = "复制图片并完成（点击按钮）";
+"ocrConfirm" = "复制图片并完成（Enter；编辑识别文字时按 ⌘Enter）";
 
 "saveLocation" = "保存位置";
 "chooseSaveLocation" = "选择文件夹…";
@@ -186,6 +188,15 @@
 "scrollPartial" = "最后的画面无法对齐。预览显示截至上一次成功拼接的内容。";
 "scrollSourceFailed" = "屏幕截取已中断。";
 "scrollPreviewTitle" = "滚动截图预览";
+"scrollSizeHint" = "⌘ 滚动缩放 · ⌥ 滚动调整标注";
 "scrollDimensions" = "%lld × %lld 像素";
 "scrollProgressWide" = "已拼接 %lld 像素宽。可以继续滚动，或点「完成」。";
+"scrollTopStart" = "向上补全";
+"scrollTopReached" = "已到顶，可向上补全";
+"scrollTopUnavailable" = "当前画面对不上长图开头。请滚回顶部再试。";
+"scrollBottomStart" = "向下补全";
+"scrollBottomReached" = "已到底，可向下补全";
+"scrollBottomApply" = "确认并预览";
+"scrollBottomInstructions" = "滚动移动选区，点绿色 ✓ 或按 Enter 确认。";
+"scrollBottomUnavailable" = "当前画面对不上长图末尾。请滚到最后截到的位置再试。";
 "scrollMosaicHint" = "马赛克（Option 加滚动调整粗细；点击笔迹后可拖动或删除）";
